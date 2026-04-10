@@ -144,6 +144,7 @@ export class NamespaceSpecBuilder {
     }
 
     validateBasic(normalized);
+    validateReliableMode(normalized);
 
     return Object.freeze({
       path: normalized.path,
@@ -207,6 +208,31 @@ function validateBasic(fields: {
   }
   if (fields.maxRetries < 0) {
     throw new Error('maxRetries must be zero or positive');
+  }
+}
+
+function validateReliableMode(fields: {
+  deliveryMode: DeliveryModeValue;
+  overflowAction: OverflowActionValue;
+  coalesce: boolean;
+  maxRetries: number;
+  maxInFlight: number;
+  maxQueuedMessagesPerClient: number;
+}): void {
+  if (fields.deliveryMode !== DeliveryMode.AT_LEAST_ONCE) {
+    return;
+  }
+  if (fields.overflowAction !== OverflowAction.REJECT_NEW) {
+    throw new Error('AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction');
+  }
+  if (fields.coalesce) {
+    throw new Error('AT_LEAST_ONCE namespaces cannot enable coalescing');
+  }
+  if (fields.maxRetries <= 0) {
+    throw new Error('AT_LEAST_ONCE namespaces must allow at least one retry');
+  }
+  if (fields.maxInFlight > fields.maxQueuedMessagesPerClient) {
+    throw new Error('maxInFlight must not exceed maxQueuedMessagesPerClient');
   }
 }
 

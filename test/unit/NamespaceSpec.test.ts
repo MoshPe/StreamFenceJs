@@ -129,3 +129,71 @@ describe('NamespaceSpec - basic field validation', () => {
     expect(spec.maxInFlight).toBe(1);
   });
 });
+
+describe('NamespaceSpec - AT_LEAST_ONCE cross-field rules', () => {
+  const reliable = () =>
+    NamespaceSpec.builder('/r')
+      .topic('t')
+      .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+      .maxRetries(3);
+
+  it('requires overflowAction = REJECT_NEW', () => {
+    expect(() => reliable().overflowAction(OverflowAction.DROP_OLDEST).build()).toThrow(
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+    );
+    expect(() => reliable().overflowAction(OverflowAction.COALESCE).build()).toThrow(
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+    );
+    expect(() => reliable().overflowAction(OverflowAction.SNAPSHOT_ONLY).build()).toThrow(
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+    );
+  });
+
+  it('forbids coalesce = true', () => {
+    expect(() => reliable().coalesce(true).build()).toThrow(
+      'AT_LEAST_ONCE namespaces cannot enable coalescing',
+    );
+  });
+
+  it('requires maxRetries > 0', () => {
+    expect(() =>
+      NamespaceSpec.builder('/r')
+        .topic('t')
+        .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
+        .maxRetries(0)
+        .build(),
+    ).toThrow('AT_LEAST_ONCE namespaces must allow at least one retry');
+  });
+
+  it('rejects maxInFlight > maxQueuedMessagesPerClient', () => {
+    expect(() =>
+      reliable().maxQueuedMessagesPerClient(4).maxInFlight(8).build(),
+    ).toThrow('maxInFlight must not exceed maxQueuedMessagesPerClient');
+  });
+
+  it('accepts a fully valid AT_LEAST_ONCE configuration', () => {
+    const spec = reliable()
+      .overflowAction(OverflowAction.REJECT_NEW)
+      .maxQueuedMessagesPerClient(32)
+      .maxInFlight(8)
+      .ackTimeoutMs(2000)
+      .build();
+
+    expect(spec.deliveryMode).toBe(DeliveryMode.AT_LEAST_ONCE);
+    expect(spec.maxInFlight).toBe(8);
+  });
+
+  it('BEST_EFFORT namespaces do not enforce the AT_LEAST_ONCE cross-field rules', () => {
+    expect(() => NamespaceSpec.builder('/b').topic('t').coalesce(true).build()).not.toThrow();
+    expect(() =>
+      NamespaceSpec.builder('/b').topic('t').overflowAction(OverflowAction.DROP_OLDEST).build(),
+    ).not.toThrow();
+    expect(() =>
+      NamespaceSpec.builder('/b')
+        .topic('t')
+        .maxQueuedMessagesPerClient(4)
+        .maxInFlight(8)
+        .build(),
+    ).not.toThrow();
+  });
+});
