@@ -1,0 +1,187 @@
+import { DeliveryMode, type DeliveryModeValue } from './DeliveryMode.js';
+import { OverflowAction, type OverflowActionValue } from './OverflowAction.js';
+
+/**
+ * Immutable specification for a single Socket.IO namespace.
+ *
+ * A namespace groups one or more topics under a shared delivery policy. Instances are
+ * built via `NamespaceSpec.builder(path)` and validated on `build()`.
+ *
+ * Mirrors `io.streamfence.NamespaceSpec` in the parent Java library.
+ */
+export interface NamespaceSpec {
+  readonly path: string;
+  readonly authRequired: boolean;
+  readonly topics: readonly string[];
+  readonly deliveryMode: DeliveryModeValue;
+  readonly overflowAction: OverflowActionValue;
+  readonly maxQueuedMessagesPerClient: number;
+  readonly maxQueuedBytesPerClient: number;
+  readonly ackTimeoutMs: number;
+  readonly maxRetries: number;
+  readonly coalesce: boolean;
+  readonly allowPolling: boolean;
+  readonly maxInFlight: number;
+}
+
+interface MutableFields {
+  path: string;
+  authRequired: boolean;
+  topics: string[];
+  deliveryMode: DeliveryModeValue;
+  overflowAction: OverflowActionValue;
+  maxQueuedMessagesPerClient: number;
+  maxQueuedBytesPerClient: number;
+  ackTimeoutMs: number;
+  maxRetries: number;
+  coalesce: boolean;
+  allowPolling: boolean;
+  maxInFlight: number;
+}
+
+/**
+ * Fluent builder for `NamespaceSpec`. Call `NamespaceSpec.builder(path)` to obtain one.
+ *
+ * Default values (matching Java `NamespaceSpec.Builder`):
+ *   deliveryMode               = BEST_EFFORT
+ *   overflowAction             = REJECT_NEW
+ *   maxQueuedMessagesPerClient = 64
+ *   maxQueuedBytesPerClient    = 524_288 (512 KiB)
+ *   ackTimeoutMs               = 1_000
+ *   maxRetries                 = 0
+ *   coalesce                   = false
+ *   allowPolling               = true
+ *   maxInFlight                = 1
+ *   authRequired               = false
+ */
+export class NamespaceSpecBuilder {
+  private readonly fields: MutableFields;
+
+  /** @internal Use `NamespaceSpec.builder(path)` instead. */
+  constructor(path: string) {
+    this.fields = {
+      path,
+      authRequired: false,
+      topics: [],
+      deliveryMode: DeliveryMode.BEST_EFFORT,
+      overflowAction: OverflowAction.REJECT_NEW,
+      maxQueuedMessagesPerClient: 64,
+      maxQueuedBytesPerClient: 524_288,
+      ackTimeoutMs: 1_000,
+      maxRetries: 0,
+      coalesce: false,
+      allowPolling: true,
+      maxInFlight: 1,
+    };
+  }
+
+  authRequired(value: boolean): this {
+    this.fields.authRequired = value;
+    return this;
+  }
+
+  topics(topics: readonly string[]): this {
+    this.fields.topics = [...topics];
+    return this;
+  }
+
+  topic(topic: string): this {
+    this.fields.topics.push(topic);
+    return this;
+  }
+
+  deliveryMode(mode: DeliveryModeValue): this {
+    this.fields.deliveryMode = mode;
+    return this;
+  }
+
+  overflowAction(action: OverflowActionValue): this {
+    this.fields.overflowAction = action;
+    return this;
+  }
+
+  maxQueuedMessagesPerClient(value: number): this {
+    this.fields.maxQueuedMessagesPerClient = value;
+    return this;
+  }
+
+  maxQueuedBytesPerClient(value: number): this {
+    this.fields.maxQueuedBytesPerClient = value;
+    return this;
+  }
+
+  ackTimeoutMs(value: number): this {
+    this.fields.ackTimeoutMs = value;
+    return this;
+  }
+
+  maxRetries(value: number): this {
+    this.fields.maxRetries = value;
+    return this;
+  }
+
+  coalesce(value: boolean): this {
+    this.fields.coalesce = value;
+    return this;
+  }
+
+  allowPolling(value: boolean): this {
+    this.fields.allowPolling = value;
+    return this;
+  }
+
+  maxInFlight(value: number): this {
+    this.fields.maxInFlight = value;
+    return this;
+  }
+
+  build(): NamespaceSpec {
+    const topicsCopy = Object.freeze([...this.fields.topics]);
+    const normalized = { ...this.fields, topics: topicsCopy };
+
+    if (normalized.maxInFlight <= 0) {
+      normalized.maxInFlight = 1;
+    }
+
+    validateBasic(normalized);
+
+    return Object.freeze({
+      path: normalized.path,
+      authRequired: normalized.authRequired,
+      topics: topicsCopy,
+      deliveryMode: normalized.deliveryMode,
+      overflowAction: normalized.overflowAction,
+      maxQueuedMessagesPerClient: normalized.maxQueuedMessagesPerClient,
+      maxQueuedBytesPerClient: normalized.maxQueuedBytesPerClient,
+      ackTimeoutMs: normalized.ackTimeoutMs,
+      maxRetries: normalized.maxRetries,
+      coalesce: normalized.coalesce,
+      allowPolling: normalized.allowPolling,
+      maxInFlight: normalized.maxInFlight,
+    });
+  }
+}
+
+function validateBasic(_fields: {
+  path: string;
+  topics: readonly string[];
+  deliveryMode: DeliveryModeValue;
+  overflowAction: OverflowActionValue;
+}): void {
+  // Stub - Task 7 adds basic field validation; Task 8 adds cross-field rules.
+}
+
+/**
+ * Namespace factory entry point. Use `NamespaceSpec.builder('/path')` to obtain a
+ * fresh builder seeded with sensible defaults.
+ */
+export const NamespaceSpec = Object.freeze({
+  /**
+   * Returns a new `NamespaceSpecBuilder` for the given namespace path.
+   *
+   * @param path the namespace path (e.g. `'/feed'`); must start with `'/'`
+   */
+  builder(path: string): NamespaceSpecBuilder {
+    return new NamespaceSpecBuilder(path);
+  },
+});

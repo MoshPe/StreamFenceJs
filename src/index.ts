@@ -6,3 +6,4 @@ export { AuthMode, type AuthModeValue } from './AuthMode.js';
 export { AuthDecision } from './AuthDecision.js';
 export type { TokenValidator } from './TokenValidator.js';
 export { TlsConfig, type TlsConfigInput } from './TlsConfig.js';
+export { NamespaceSpec, type NamespaceSpecBuilder } from './NamespaceSpec.js';
