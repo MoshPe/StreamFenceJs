@@ -24,8 +24,8 @@ describe('ServerEventListener', () => {
         expect(event.namespace).toBeDefined();
       },
     };
-    expect(listener.onClientConnected).toBeDefined();
-    expect(listener.onClientDisconnected).toBeUndefined();
+    expect('onClientConnected' in listener).toBe(true);
+    expect('onClientDisconnected' in listener).toBe(false);
   });
 
   it('accepts a listener that implements every callback', () => {
