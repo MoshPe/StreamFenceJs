@@ -162,13 +162,52 @@ export class NamespaceSpecBuilder {
   }
 }
 
-function validateBasic(_fields: {
+function validateBasic(fields: {
   path: string;
   topics: readonly string[];
   deliveryMode: DeliveryModeValue;
   overflowAction: OverflowActionValue;
+  maxQueuedMessagesPerClient: number;
+  maxQueuedBytesPerClient: number;
+  ackTimeoutMs: number;
+  maxRetries: number;
 }): void {
-  // Stub - Task 7 adds basic field validation; Task 8 adds cross-field rules.
+  if (!fields.path || fields.path.trim() === '' || !fields.path.startsWith('/')) {
+    throw new Error("namespace path must start with '/'");
+  }
+  if (fields.topics.length === 0) {
+    throw new Error('namespace must define at least one topic');
+  }
+
+  const seen = new Set<string>();
+  for (const topic of fields.topics) {
+    if (topic === null || topic === undefined || topic.trim() === '') {
+      throw new Error(`topic names must not be blank in namespace ${fields.path}`);
+    }
+    if (seen.has(topic)) {
+      throw new Error(`duplicate topic in namespace ${fields.path}: ${topic}`);
+    }
+    seen.add(topic);
+  }
+
+  if (fields.deliveryMode === null || fields.deliveryMode === undefined) {
+    throw new Error('deliveryMode is required');
+  }
+  if (fields.overflowAction === null || fields.overflowAction === undefined) {
+    throw new Error('overflowAction is required');
+  }
+  if (fields.maxQueuedMessagesPerClient <= 0) {
+    throw new Error('maxQueuedMessagesPerClient must be positive');
+  }
+  if (fields.maxQueuedBytesPerClient <= 0) {
+    throw new Error('maxQueuedBytesPerClient must be positive');
+  }
+  if (fields.ackTimeoutMs <= 0) {
+    throw new Error('ackTimeoutMs must be positive');
+  }
+  if (fields.maxRetries < 0) {
+    throw new Error('maxRetries must be zero or positive');
+  }
 }
 
 /**

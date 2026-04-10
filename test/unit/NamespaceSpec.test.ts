@@ -61,3 +61,71 @@ describe('NamespaceSpec - builder happy path', () => {
     expect(Object.isFrozen(spec)).toBe(true);
   });
 });
+
+describe('NamespaceSpec - basic field validation', () => {
+  const valid = () => NamespaceSpec.builder('/x').topic('t');
+
+  it('rejects a path that does not start with "/"', () => {
+    expect(() => NamespaceSpec.builder('feed').topic('t').build()).toThrow(
+      "namespace path must start with '/'",
+    );
+  });
+
+  it('rejects a blank path', () => {
+    expect(() => NamespaceSpec.builder('').topic('t').build()).toThrow(
+      "namespace path must start with '/'",
+    );
+  });
+
+  it('rejects an empty topic list', () => {
+    expect(() => NamespaceSpec.builder('/x').build()).toThrow(
+      'namespace must define at least one topic',
+    );
+  });
+
+  it('rejects a blank topic name', () => {
+    expect(() => NamespaceSpec.builder('/x').topics(['', 'valid']).build()).toThrow(
+      'topic names must not be blank in namespace /x',
+    );
+  });
+
+  it('rejects a whitespace-only topic name', () => {
+    expect(() => NamespaceSpec.builder('/x').topics(['   ']).build()).toThrow(
+      'topic names must not be blank in namespace /x',
+    );
+  });
+
+  it('rejects duplicate topic names', () => {
+    expect(() => NamespaceSpec.builder('/x').topics(['a', 'b', 'a']).build()).toThrow(
+      'duplicate topic in namespace /x: a',
+    );
+  });
+
+  it('rejects non-positive maxQueuedMessagesPerClient', () => {
+    expect(() => valid().maxQueuedMessagesPerClient(0).build()).toThrow(
+      'maxQueuedMessagesPerClient must be positive',
+    );
+    expect(() => valid().maxQueuedMessagesPerClient(-1).build()).toThrow(
+      'maxQueuedMessagesPerClient must be positive',
+    );
+  });
+
+  it('rejects non-positive maxQueuedBytesPerClient', () => {
+    expect(() => valid().maxQueuedBytesPerClient(0).build()).toThrow(
+      'maxQueuedBytesPerClient must be positive',
+    );
+  });
+
+  it('rejects non-positive ackTimeoutMs', () => {
+    expect(() => valid().ackTimeoutMs(0).build()).toThrow('ackTimeoutMs must be positive');
+  });
+
+  it('rejects negative maxRetries', () => {
+    expect(() => valid().maxRetries(-1).build()).toThrow('maxRetries must be zero or positive');
+  });
+
+  it('normalizes non-positive maxInFlight to 1', () => {
+    const spec = valid().maxInFlight(0).build();
+    expect(spec.maxInFlight).toBe(1);
+  });
+});
