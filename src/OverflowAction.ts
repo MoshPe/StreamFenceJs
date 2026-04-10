@@ -1,0 +1,46 @@
+/**
+ * Action taken when a client's per-topic queue is full and a new message arrives.
+ *
+ * Configured per namespace and applies uniformly to all topics in that namespace.
+ * `DeliveryMode.AT_LEAST_ONCE` namespaces must use `REJECT_NEW`.
+ *
+ * Mirrors `io.streamfence.OverflowAction` in the parent Java library.
+ */
+export const OverflowAction = {
+  /**
+   * Remove the oldest enqueued message and accept the new one. The dropped message is
+   * lost and the client will never receive it. Useful for live-data feeds where stale
+   * values are less harmful than blocking new updates.
+   */
+  DROP_OLDEST: 'DROP_OLDEST',
+
+  /**
+   * Reject the incoming message and leave the queue unchanged. The publisher receives
+   * a `QueueOverflowEvent`. Suitable for reliable pipelines where back-pressure should
+   * propagate to the sender.
+   */
+  REJECT_NEW: 'REJECT_NEW',
+
+  /**
+   * Replace the most recent pending message of the same topic with the new one.
+   * Effective for snapshot-style feeds (e.g. price tickers) where only the latest value
+   * matters. Only applicable to `BEST_EFFORT` namespaces.
+   */
+  COALESCE: 'COALESCE',
+
+  /**
+   * Keep only the latest message in the queue; all older pending messages are
+   * discarded. The client receives a single up-to-date snapshot on drain rather than a
+   * backlog of stale entries.
+   */
+  SNAPSHOT_ONLY: 'SNAPSHOT_ONLY',
+
+  /**
+   * Overflow messages are spilled to a local disk buffer and replayed when the client's
+   * in-memory queue drains. Suitable for bursty workloads where temporary backpressure
+   * is acceptable but message loss is not.
+   */
+  SPILL_TO_DISK: 'SPILL_TO_DISK',
+} as const;
+
+export type OverflowActionValue = (typeof OverflowAction)[keyof typeof OverflowAction];
