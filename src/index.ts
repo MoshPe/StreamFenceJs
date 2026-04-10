@@ -24,3 +24,4 @@ export type {
   RetryEvent,
   RetryExhaustedEvent,
 } from './ServerEventListener.js';
+export { type ServerMetrics, NoopServerMetrics } from './ServerMetrics.js';
