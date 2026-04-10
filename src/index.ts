@@ -7,3 +7,20 @@ export { AuthDecision } from './AuthDecision.js';
 export type { TokenValidator } from './TokenValidator.js';
 export { TlsConfig, type TlsConfigInput } from './TlsConfig.js';
 export { NamespaceSpec, type NamespaceSpecBuilder } from './NamespaceSpec.js';
+export type {
+  ServerEventListener,
+  ServerStartingEvent,
+  ServerStartedEvent,
+  ServerStoppingEvent,
+  ServerStoppedEvent,
+  ClientConnectedEvent,
+  ClientDisconnectedEvent,
+  SubscribedEvent,
+  UnsubscribedEvent,
+  PublishAcceptedEvent,
+  PublishRejectedEvent,
+  QueueOverflowEvent,
+  AuthRejectedEvent,
+  RetryEvent,
+  RetryExhaustedEvent,
+} from './ServerEventListener.js';
