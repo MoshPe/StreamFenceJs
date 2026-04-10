@@ -3,3 +3,4 @@ export { DeliveryMode, type DeliveryModeValue } from './DeliveryMode.js';
 export { OverflowAction, type OverflowActionValue } from './OverflowAction.js';
 export { TransportMode, type TransportModeValue } from './TransportMode.js';
 export { AuthMode, type AuthModeValue } from './AuthMode.js';
+export { AuthDecision } from './AuthDecision.js';
