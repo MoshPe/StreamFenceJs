@@ -1,0 +1,16 @@
+servers:
+  feed:
+    port: 3000
+    namespaces:
+      - path: /feed
+        topics:
+          - snapshot
+  control:
+    port: 3001
+    namespaces:
+      - path: /commands
+        topics:
+          - send
+        deliveryMode: AT_LEAST_ONCE
+        overflowAction: REJECT_NEW
+        maxRetries: 3
