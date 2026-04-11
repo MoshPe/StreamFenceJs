@@ -12,6 +12,9 @@ export class StreamFenceServer {
   private running = false;
   private readonly handlers = new Map<string, InboundMessageHandler>();
   private readonly listeners: ServerEventListener[];
+  private retryProcessor: (() => void) | null = null;
+  private retryIntervalMs = 50;
+  private retryIntervalHandle: NodeJS.Timeout | undefined;
 
   constructor(private readonly spec: StreamFenceServerSpec) {
     this.listeners = [...spec.listeners];
@@ -22,13 +25,23 @@ export class StreamFenceServer {
       return;
     }
     this.running = true;
+
+    if (this.retryProcessor !== null && this.retryIntervalHandle === undefined) {
+      this.retryIntervalHandle = setInterval(() => {
+        this.retryProcessor?.();
+      }, this.retryIntervalMs);
+    }
   }
 
   async stop(): Promise<void> {
-    if (!this.running) {
-      return;
+    if (this.retryIntervalHandle !== undefined) {
+      clearInterval(this.retryIntervalHandle);
+      this.retryIntervalHandle = undefined;
     }
-    this.running = false;
+
+    if (this.running) {
+      this.running = false;
+    }
   }
 
   publish(namespace: string, topic: string, payload: unknown): void {
@@ -54,5 +67,10 @@ export class StreamFenceServer {
 
   metrics(): ServerMetrics {
     return this.spec.metrics;
+  }
+
+  attachRetryProcessor(processor: () => void, intervalMs: number = 50): void {
+    this.retryProcessor = processor;
+    this.retryIntervalMs = intervalMs;
   }
 }
