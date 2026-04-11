@@ -4,7 +4,7 @@ import { DeliveryMode } from '../../src/DeliveryMode.js';
 import { OverflowAction } from '../../src/OverflowAction.js';
 import { EngineIoTransportMode } from '../../src/EngineIoTransportMode.js';
 import { NoopServerMetrics } from '../../src/ServerMetrics.js';
-import { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
+import type { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
 import { AckTracker } from '../../src/internal/delivery/AckTracker.js';
 import { ClientSessionRegistry } from '../../src/internal/delivery/ClientSessionRegistry.js';
 import { RetryService } from '../../src/internal/delivery/RetryService.js';

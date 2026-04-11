@@ -8,7 +8,7 @@ import { ClientSessionRegistry } from '../../src/internal/delivery/ClientSession
 import { RetryService } from '../../src/internal/delivery/RetryService.js';
 import { TopicDispatcher } from '../../src/internal/delivery/TopicDispatcher.js';
 import { TopicRegistry } from '../../src/internal/delivery/TopicRegistry.js';
-import { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
+import type { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
 import { NamespaceHandler } from '../../src/internal/transport/NamespaceHandler.js';
 import { SocketServerBootstrap } from '../../src/internal/transport/SocketServerBootstrap.js';
 import { EngineIoTransportMode } from '../../src/EngineIoTransportMode.js';
@@ -78,12 +78,13 @@ describe('namespace subscribe flow', () => {
     });
 
     await new Promise<void>((resolve) => client!.once('connect', () => resolve()));
+    const clientId = client.id as string;
 
     client.emit('subscribe', { topic: 'snapshot', token: null });
     await waitForTick();
 
     expect(sessionRegistry.subscribersOf('/feed', 'snapshot').map((s) => s.clientId)).toEqual([
-      client.id,
+      clientId,
     ]);
 
     client.emit('unsubscribe', { topic: 'snapshot', token: null });
@@ -94,7 +95,7 @@ describe('namespace subscribe flow', () => {
     client.disconnect();
     await waitForTick();
 
-    expect(sessionRegistry.get(client.id)).toBeUndefined();
+    expect(sessionRegistry.get(clientId)).toBeUndefined();
 
     dispatcher.close();
     handler.stop();

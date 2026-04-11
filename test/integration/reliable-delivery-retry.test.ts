@@ -4,7 +4,7 @@ import { DeliveryMode } from '../../src/DeliveryMode.js';
 import { OverflowAction } from '../../src/OverflowAction.js';
 import { EngineIoTransportMode } from '../../src/EngineIoTransportMode.js';
 import { NoopServerMetrics } from '../../src/ServerMetrics.js';
-import { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
+import type { TopicPolicy } from '../../src/internal/config/TopicPolicy.js';
 import { AckTracker } from '../../src/internal/delivery/AckTracker.js';
 import { ClientSessionRegistry } from '../../src/internal/delivery/ClientSessionRegistry.js';
 import { RetryService } from '../../src/internal/delivery/RetryService.js';
@@ -95,8 +95,17 @@ describe('reliable delivery retry', () => {
     dispatcher.processRetries();
     await waitFor(() => receivedCount >= 2, 300);
 
-    const messageId = sessionRegistry.get(client.id)?.lane('snapshot')?.peek()?.messageId;
+    const clientId = client.id;
+    expect(clientId).toBeDefined();
+    if (clientId === undefined) {
+      throw new Error('client id should be defined after connect');
+    }
+
+    const messageId = sessionRegistry.get(clientId)?.lane('snapshot')?.peek()?.messageId;
     expect(messageId).toBeDefined();
+    if (messageId === undefined) {
+      throw new Error('message id should exist for pending reliable delivery');
+    }
 
     client.emit('ack', { topic: 'snapshot', messageId });
     await delay(80);
