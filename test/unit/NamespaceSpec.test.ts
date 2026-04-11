@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NamespaceSpec } from '../../src/NamespaceSpec.js';
 import { DeliveryMode } from '../../src/DeliveryMode.js';
 import { OverflowAction } from '../../src/OverflowAction.js';
+import { InboundAckPolicy } from '../../src/InboundAckPolicy.js';
 
 describe('NamespaceSpec - builder happy path', () => {
   it('builds a spec with all defaults when only path + one topic are set', () => {
@@ -18,6 +19,7 @@ describe('NamespaceSpec - builder happy path', () => {
     expect(spec.coalesce).toBe(false);
     expect(spec.allowPolling).toBe(true);
     expect(spec.maxInFlight).toBe(1);
+    expect(spec.inboundAckPolicy).toBe(InboundAckPolicy.ACK_ON_RECEIPT);
   });
 
   it('allows every field to be overridden via the fluent builder', () => {
@@ -33,6 +35,7 @@ describe('NamespaceSpec - builder happy path', () => {
       .coalesce(false)
       .allowPolling(false)
       .maxInFlight(4)
+      .inboundAckPolicy(InboundAckPolicy.ACK_AFTER_HANDLER_SUCCESS)
       .build();
 
     expect(spec.path).toBe('/control');
@@ -46,6 +49,7 @@ describe('NamespaceSpec - builder happy path', () => {
     expect(spec.maxRetries).toBe(5);
     expect(spec.allowPolling).toBe(false);
     expect(spec.maxInFlight).toBe(4);
+    expect(spec.inboundAckPolicy).toBe(InboundAckPolicy.ACK_AFTER_HANDLER_SUCCESS);
   });
 
   it('the topics array on a built spec is a defensive copy (cannot be mutated)', () => {
