@@ -1,42 +1,29 @@
+import type { LaneEntry } from './LaneEntry.js';
 import { RetryAction, type RetryActionValue } from './RetryAction.js';
 
 export interface RetryDecision {
   readonly action: RetryActionValue;
-  readonly attempt: number;
-  readonly nextDelayMs: number | null;
+  readonly clientId: string;
+  readonly namespace: string;
+  readonly topic: string;
+  readonly pendingMessage: LaneEntry;
 }
 
-function requirePositiveAttempt(attempt: number): void {
-  if (attempt <= 0) {
-    throw new Error('attempt must be positive');
-  }
+export function createRetryDecision(input: {
+  action: RetryActionValue;
+  clientId: string;
+  namespace: string;
+  topic: string;
+  pendingMessage: LaneEntry;
+}): RetryDecision {
+  return Object.freeze({
+    action: input.action,
+    clientId: input.clientId,
+    namespace: input.namespace,
+    topic: input.topic,
+    pendingMessage: input.pendingMessage,
+  });
 }
-
-export const RetryDecision = Object.freeze({
-  retry(attempt: number, nextDelayMs: number): RetryDecision {
-    requirePositiveAttempt(attempt);
-
-    if (nextDelayMs < 0) {
-      throw new Error('nextDelayMs must be zero or positive');
-    }
-
-    return Object.freeze({
-      action: RetryAction.RETRY,
-      attempt,
-      nextDelayMs,
-    });
-  },
-
-  giveUp(attempt: number): RetryDecision {
-    requirePositiveAttempt(attempt);
-
-    return Object.freeze({
-      action: RetryAction.GIVE_UP,
-      attempt,
-      nextDelayMs: null,
-    });
-  },
-});
 
 export { RetryAction };
 export type { RetryActionValue };

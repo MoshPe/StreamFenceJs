@@ -1,45 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { TopicRegistry } from '../../../../src/internal/delivery/TopicRegistry.js';
+import { makeTopicPolicy } from './helpers.js';
 
 describe('TopicRegistry', () => {
-  it('tracks subscriptions by topic and client with deterministic order', () => {
+  it('registers and resolves policies by namespace and topic', () => {
     const registry = new TopicRegistry();
+    const policy = makeTopicPolicy({ namespace: '/feed', topic: 'snapshot' });
 
-    registry.subscribe('snapshot', 'client-1');
-    registry.subscribe('snapshot', 'client-2');
-    registry.subscribe('alerts', 'client-1');
+    registry.register(policy);
 
-    expect(registry.subscribers('snapshot')).toEqual(['client-1', 'client-2']);
-    expect(registry.subscribers('alerts')).toEqual(['client-1']);
-    expect(registry.topicsFor('client-1')).toEqual(['snapshot', 'alerts']);
-    expect(Object.isFrozen(registry.subscribers('snapshot'))).toBe(true);
-    expect(Object.isFrozen(registry.topicsFor('client-1'))).toBe(true);
+    expect(registry.has('/feed', 'snapshot')).toBe(true);
+    expect(registry.find('/feed', 'snapshot')).toBe(policy);
+    expect(registry.find('/feed', 'missing')).toBeUndefined();
   });
 
-  it('treats duplicate subscriptions as idempotent', () => {
+  it('registerAll stores each policy', () => {
     const registry = new TopicRegistry();
 
-    registry.subscribe('snapshot', 'client-1');
-    registry.subscribe('snapshot', 'client-1');
+    registry.registerAll([
+      makeTopicPolicy({ namespace: '/feed', topic: 'snapshot' }),
+      makeTopicPolicy({ namespace: '/feed', topic: 'alerts' }),
+    ]);
 
-    expect(registry.subscribers('snapshot')).toEqual(['client-1']);
-    expect(registry.topicsFor('client-1')).toEqual(['snapshot']);
-  });
-
-  it('supports unsubscribe and unsubscribeAll cleanup', () => {
-    const registry = new TopicRegistry();
-
-    registry.subscribe('snapshot', 'client-1');
-    registry.subscribe('alerts', 'client-1');
-    registry.subscribe('snapshot', 'client-2');
-
-    expect(registry.unsubscribe('snapshot', 'client-1')).toBe(true);
-    expect(registry.unsubscribe('snapshot', 'client-1')).toBe(false);
-    expect(registry.subscribers('snapshot')).toEqual(['client-2']);
-
-    registry.unsubscribeAll('client-1');
-
-    expect(registry.topicsFor('client-1')).toEqual([]);
-    expect(registry.subscribers('alerts')).toEqual([]);
+    expect(registry.has('/feed', 'snapshot')).toBe(true);
+    expect(registry.has('/feed', 'alerts')).toBe(true);
   });
 });

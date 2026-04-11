@@ -1,70 +1,27 @@
+import type { TopicPolicy } from '../config/TopicPolicy.js';
+
 export class TopicRegistry {
-  private readonly topicsByClient = new Map<string, Set<string>>();
-  private readonly clientsByTopic = new Map<string, Set<string>>();
+  private readonly policies = new Map<string, TopicPolicy>();
 
-  subscribe(topic: string, clientId: string): void {
-    let subscribers = this.clientsByTopic.get(topic);
-    if (subscribers === undefined) {
-      subscribers = new Set<string>();
-      this.clientsByTopic.set(topic, subscribers);
-    }
-    subscribers.add(clientId);
-
-    let topics = this.topicsByClient.get(clientId);
-    if (topics === undefined) {
-      topics = new Set<string>();
-      this.topicsByClient.set(clientId, topics);
-    }
-    topics.add(topic);
+  register(policy: TopicPolicy): void {
+    this.policies.set(this.key(policy.namespace, policy.topic), policy);
   }
 
-  unsubscribe(topic: string, clientId: string): boolean {
-    const subscribers = this.clientsByTopic.get(topic);
-    if (subscribers === undefined || !subscribers.delete(clientId)) {
-      return false;
+  registerAll(policies: TopicPolicy[]): void {
+    for (const policy of policies) {
+      this.register(policy);
     }
-
-    if (subscribers.size === 0) {
-      this.clientsByTopic.delete(topic);
-    }
-
-    const topics = this.topicsByClient.get(clientId);
-    if (topics !== undefined) {
-      topics.delete(topic);
-      if (topics.size === 0) {
-        this.topicsByClient.delete(clientId);
-      }
-    }
-
-    return true;
   }
 
-  unsubscribeAll(clientId: string): void {
-    const topics = this.topicsByClient.get(clientId);
-    if (topics === undefined) {
-      return;
-    }
-
-    for (const topic of topics) {
-      const subscribers = this.clientsByTopic.get(topic);
-      if (subscribers === undefined) {
-        continue;
-      }
-
-      subscribers.delete(clientId);
-      if (subscribers.size === 0) {
-        this.clientsByTopic.delete(topic);
-      }
-    }
-
-    this.topicsByClient.delete(clientId);
+  find(namespace: string, topic: string): TopicPolicy | undefined {
+    return this.policies.get(this.key(namespace, topic));
   }
 
-  subscribers(topic: string): string[] {
-    return [...(this.clientsByTopic.get(topic) ?? [])];
+  has(namespace: string, topic: string): boolean {
+    return this.policies.has(this.key(namespace, topic));
   }
 
-  topicsFor(clientId: string): string[] {
-    return [...(this.topicsByClient.get(clientId) ?? [])];
+  private key(namespace: string, topic: string): string {
+    return `${namespace}::${topic}`;
   }
 }

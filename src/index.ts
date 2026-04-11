@@ -31,3 +31,4 @@ export type {
 
 // Public API - metrics
 export { type ServerMetrics, NoopServerMetrics } from './ServerMetrics.js';
+export { PromServerMetrics } from './PromServerMetrics.js';

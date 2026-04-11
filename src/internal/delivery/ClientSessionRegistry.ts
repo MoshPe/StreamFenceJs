@@ -1,60 +1,78 @@
-import {
-  createClientSessionState,
-  type ClientSessionState,
-} from './ClientSessionState.js';
-import { TopicRegistry } from './TopicRegistry.js';
+import { ClientSessionState } from './ClientSessionState.js';
 
 export class ClientSessionRegistry {
   private readonly sessions = new Map<string, ClientSessionState>();
+  private readonly subscriptions = new Map<string, Set<string>>();
 
-  constructor(private readonly namespace: string) {}
+  register(state: ClientSessionState): void {
+    this.sessions.set(state.clientId, state);
+  }
 
-  register(session: ClientSessionState, options?: { replace?: boolean }): void {
-    if (session.namespace !== this.namespace) {
-      throw new Error(
-        `session namespace ${session.namespace} does not match registry namespace ${this.namespace}`,
-      );
+  remove(clientId: string): void {
+    const state = this.sessions.get(clientId);
+    if (state !== undefined) {
+      for (const topic of state.subscribedTopics()) {
+        this.removeSubscription(state.namespace, topic, clientId);
+      }
     }
 
-    if (!options?.replace && this.sessions.has(session.clientId)) {
-      throw new Error(
-        `session already registered for client ${session.clientId} in namespace ${this.namespace}`,
-      );
+    this.sessions.delete(clientId);
+  }
+
+  get(clientId: string): ClientSessionState | undefined {
+    return this.sessions.get(clientId);
+  }
+
+  subscribersOf(namespace: string, topic: string): ClientSessionState[] {
+    const clientIds = this.subscriptions.get(this.key(namespace, topic));
+    if (clientIds === undefined) {
+      return [];
     }
 
-    this.sessions.set(session.clientId, session);
-  }
-
-  has(clientId: string): boolean {
-    return this.sessions.has(clientId);
-  }
-
-  get(clientId: string): ClientSessionState | null {
-    return this.sessions.get(clientId) ?? null;
-  }
-
-  list(): ClientSessionState[] {
-    return [...this.sessions.values()];
-  }
-
-  remove(clientId: string): ClientSessionState | null {
-    const session = this.sessions.get(clientId) ?? null;
-    if (session !== null) {
-      this.sessions.delete(clientId);
-    }
-    return session;
-  }
-
-  disconnect(clientId: string, topics: TopicRegistry): ClientSessionState | null {
-    const session = this.remove(clientId);
-    if (session === null) {
-      return null;
+    const subscribers: ClientSessionState[] = [];
+    for (const clientId of clientIds) {
+      const state = this.sessions.get(clientId);
+      if (state !== undefined) {
+        subscribers.push(state);
+      }
     }
 
-    topics.unsubscribeAll(clientId);
-    return session;
+    return subscribers;
+  }
+
+  subscribe(state: ClientSessionState, topic: string): void {
+    this.sessions.set(state.clientId, state);
+    state.subscribe(topic);
+
+    const key = this.key(state.namespace, topic);
+    let subscribers = this.subscriptions.get(key);
+    if (subscribers === undefined) {
+      subscribers = new Set<string>();
+      this.subscriptions.set(key, subscribers);
+    }
+
+    subscribers.add(state.clientId);
+  }
+
+  unsubscribe(state: ClientSessionState, topic: string): void {
+    state.unsubscribe(topic);
+    this.removeSubscription(state.namespace, topic, state.clientId);
+  }
+
+  private removeSubscription(namespace: string, topic: string, clientId: string): void {
+    const key = this.key(namespace, topic);
+    const subscribers = this.subscriptions.get(key);
+    if (subscribers === undefined) {
+      return;
+    }
+
+    subscribers.delete(clientId);
+    if (subscribers.size === 0) {
+      this.subscriptions.delete(key);
+    }
+  }
+
+  private key(namespace: string, topic: string): string {
+    return `${namespace}::${topic}`;
   }
 }
-
-export { createClientSessionState };
-export type { ClientSessionState };

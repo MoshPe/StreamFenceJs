@@ -1,40 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import {
   RetryAction,
-  RetryDecision,
-  type RetryDecision as RetryDecisionValue,
+  createRetryDecision,
 } from '../../../../src/internal/delivery/RetryDecision.js';
+import { makeLaneEntry } from './helpers.js';
 
 describe('RetryAction', () => {
-  it('exposes RETRY and GIVE_UP', () => {
+  it('exposes RETRY and EXHAUSTED', () => {
     expect(RetryAction.RETRY).toBe('RETRY');
-    expect(RetryAction.GIVE_UP).toBe('GIVE_UP');
-    expect(Object.keys(RetryAction)).toHaveLength(2);
+    expect(RetryAction.EXHAUSTED).toBe('EXHAUSTED');
   });
 });
 
-describe('RetryDecision', () => {
-  it('creates immutable retry decisions with an attempt number and next delay', () => {
-    const decision: RetryDecisionValue = RetryDecision.retry(2, 1_500);
+describe('createRetryDecision', () => {
+  it('creates an immutable retry decision', () => {
+    const decision = createRetryDecision({
+      action: RetryAction.RETRY,
+      clientId: 'client-1',
+      namespace: '/feed',
+      topic: 'snapshot',
+      pendingMessage: makeLaneEntry(),
+    });
 
     expect(decision.action).toBe(RetryAction.RETRY);
-    expect(decision.attempt).toBe(2);
-    expect(decision.nextDelayMs).toBe(1_500);
+    expect(decision.clientId).toBe('client-1');
+    expect(decision.topic).toBe('snapshot');
     expect(Object.isFrozen(decision)).toBe(true);
-  });
-
-  it('creates immutable give-up decisions without a next delay', () => {
-    const decision = RetryDecision.giveUp(4);
-
-    expect(decision.action).toBe(RetryAction.GIVE_UP);
-    expect(decision.attempt).toBe(4);
-    expect(decision.nextDelayMs).toBeNull();
-    expect(Object.isFrozen(decision)).toBe(true);
-  });
-
-  it('rejects negative attempts or retry delays', () => {
-    expect(() => RetryDecision.retry(0, 100)).toThrow('attempt must be positive');
-    expect(() => RetryDecision.retry(1, -1)).toThrow('nextDelayMs must be zero or positive');
-    expect(() => RetryDecision.giveUp(0)).toThrow('attempt must be positive');
   });
 });

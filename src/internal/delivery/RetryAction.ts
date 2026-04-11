@@ -1,6 +1,6 @@
 export const RetryAction = {
   RETRY: 'RETRY',
-  GIVE_UP: 'GIVE_UP',
+  EXHAUSTED: 'EXHAUSTED',
 } as const;
 
 export type RetryActionValue = (typeof RetryAction)[keyof typeof RetryAction];

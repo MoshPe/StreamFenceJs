@@ -1,48 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { DeliveryMode } from '../../../../src/DeliveryMode.js';
-import { createTopicMessageMetadata } from '../../../../src/internal/protocol/TopicMessageMetadata.js';
-import { createLaneEntry, type LaneEntry } from '../../../../src/internal/delivery/LaneEntry.js';
-import { PublishedMessage } from '../../../../src/internal/delivery/PublishedMessage.js';
-
-function createMessage() {
-  return PublishedMessage.create({
-    metadata: createTopicMessageMetadata({
-      namespace: '/feed',
-      topic: 'snapshot',
-      messageId: 'msg-1',
-      ackRequired: false,
-    }),
-    payloadBytes: new Uint8Array([1, 2, 3]),
-    deliveryMode: DeliveryMode.BEST_EFFORT,
-  });
-}
+import { LaneEntry } from '../../../../src/internal/delivery/LaneEntry.js';
+import { makePublishedMessage } from './helpers.js';
 
 describe('LaneEntry', () => {
-  it('creates an immutable queue entry with client id, timestamp, attempt, and spill marker', () => {
-    const entry: LaneEntry = createLaneEntry({
-      clientId: 'client-1',
-      message: createMessage(),
-      enqueuedAtMs: 1_700_000_000_000,
-      attempt: 2,
-      spillFilePath: 'spill/client-1/snapshot-1.json',
+  it('exposes computed accessors and mutable retry state', () => {
+    const entry = new LaneEntry({
+      publishedMessage: makePublishedMessage({
+        messageId: 'msg-1',
+        topic: 'snapshot',
+        estimatedBytes: 77,
+        ackRequired: true,
+      }),
+      retryCount: 1,
+      awaiting: true,
     });
 
-    expect(entry.clientId).toBe('client-1');
-    expect(entry.message.metadata.messageId).toBe('msg-1');
-    expect(entry.enqueuedAtMs).toBe(1_700_000_000_000);
-    expect(entry.attempt).toBe(2);
-    expect(entry.spillFilePath).toBe('spill/client-1/snapshot-1.json');
-    expect(Object.isFrozen(entry)).toBe(true);
-  });
+    expect(entry.messageId).toBe('msg-1');
+    expect(entry.topic).toBe('snapshot');
+    expect(entry.estimatedBytes).toBe(77);
+    expect(entry.ackRequired).toBe(true);
+    expect(entry.retryCount).toBe(1);
+    expect(entry.awaiting).toBe(true);
 
-  it('defaults spillFilePath to null when omitted', () => {
-    const entry = createLaneEntry({
-      clientId: 'client-2',
-      message: createMessage(),
-      enqueuedAtMs: 10,
-      attempt: 1,
-    });
+    entry.retryCount += 1;
+    entry.awaiting = false;
 
-    expect(entry.spillFilePath).toBeNull();
+    expect(entry.retryCount).toBe(2);
+    expect(entry.awaiting).toBe(false);
   });
 });
