@@ -21,7 +21,7 @@ export function loadServerConfig(filePath: string): RawServerConfig {
 
   if (ext !== '.yaml' && ext !== '.yml' && ext !== '.json') {
     throw new Error(
-      `Unsupported config file extension "${ext}" (expected .yaml, .yml, or .json)`,
+      `Unsupported config file extension "${ext}" (expected .yaml, .yml, or .json): ${filePath}`,
     );
   }
 
