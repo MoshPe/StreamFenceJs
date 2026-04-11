@@ -15,6 +15,16 @@ export type { TokenValidator } from './TokenValidator.js';
 export { TlsConfig, type TlsConfigInput } from './TlsConfig.js';
 export { NamespaceSpec, type NamespaceSpecBuilder } from './NamespaceSpec.js';
 export {
+  StreamFenceServerBuilder,
+} from './StreamFenceServerBuilder.js';
+export {
+  StreamFenceServer,
+  type InboundMessageHandler,
+} from './StreamFenceServer.js';
+export {
+  type StreamFenceServerSpec,
+} from './StreamFenceServerSpec.js';
+export {
   createInboundMessageContext,
   type InboundMessageContext,
 } from './InboundMessageContext.js';
