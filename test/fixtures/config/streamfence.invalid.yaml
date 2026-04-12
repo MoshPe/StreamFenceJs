@@ -1,0 +1,6 @@
+servers:
+  feed:
+    port: 3000
+    namespaces:
+      - path: /feed
+        topics: [snapshot
