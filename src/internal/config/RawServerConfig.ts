@@ -1,11 +1,13 @@
 import type { RawServerEntry } from './RawServerEntry.js';
 
 /**
- * Raw (unparsed/unvalidated) root configuration as read from the config file.
- * Contains a map of server entries (typically 'feed' and 'control').
+ * Top-level shape of a StreamFence YAML/JSON config file after parsing.
+ *
+ * The `servers` map key is the server name used in
+ * `StreamFenceServerBuilder.fromYaml(path, { server: '<name>' })`.
  *
  * @internal
  */
 export interface RawServerConfig {
-  servers?: Record<string, RawServerEntry>;
+  servers: Record<string, RawServerEntry>;
 }
