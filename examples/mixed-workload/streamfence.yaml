@@ -1,0 +1,31 @@
+servers:
+  feed:
+    host: "0.0.0.0"
+    port: 3000
+    managementPort: 9100
+    transport: WS
+    engineIoTransport: WEBSOCKET_OR_POLLING
+    auth: NONE
+    namespaces:
+      - path: /feed
+        topics:
+          - snapshot
+          - delta
+        deliveryMode: BEST_EFFORT
+        overflowAction: DROP_OLDEST
+        maxQueuedMessagesPerClient: 256
+        allowPolling: true
+
+  control:
+    host: "0.0.0.0"
+    port: 3001
+    auth: NONE
+    namespaces:
+      - path: /commands
+        topics:
+          - send
+        deliveryMode: AT_LEAST_ONCE
+        overflowAction: REJECT_NEW
+        maxRetries: 5
+        ackTimeoutMs: 2000
+        maxInFlight: 4
