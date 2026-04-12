@@ -1,4 +1,5 @@
 import { DeliveryMode, type DeliveryModeValue } from './DeliveryMode.js';
+import { InboundAckPolicy, type InboundAckPolicyValue } from './InboundAckPolicy.js';
 import { OverflowAction, type OverflowActionValue } from './OverflowAction.js';
 
 /**
@@ -22,6 +23,7 @@ export interface NamespaceSpec {
   readonly coalesce: boolean;
   readonly allowPolling: boolean;
   readonly maxInFlight: number;
+  readonly inboundAckPolicy: InboundAckPolicyValue;
 }
 
 interface MutableFields {
@@ -37,6 +39,7 @@ interface MutableFields {
   coalesce: boolean;
   allowPolling: boolean;
   maxInFlight: number;
+  inboundAckPolicy: InboundAckPolicyValue;
 }
 
 /**
@@ -72,6 +75,7 @@ export class NamespaceSpecBuilder {
       coalesce: false,
       allowPolling: true,
       maxInFlight: 1,
+      inboundAckPolicy: InboundAckPolicy.ACK_ON_RECEIPT,
     };
   }
 
@@ -135,6 +139,11 @@ export class NamespaceSpecBuilder {
     return this;
   }
 
+  inboundAckPolicy(value: InboundAckPolicyValue): this {
+    this.fields.inboundAckPolicy = value;
+    return this;
+  }
+
   build(): NamespaceSpec {
     const topicsCopy = Object.freeze([...this.fields.topics]);
     const normalized = { ...this.fields, topics: topicsCopy };
@@ -159,6 +168,7 @@ export class NamespaceSpecBuilder {
       coalesce: normalized.coalesce,
       allowPolling: normalized.allowPolling,
       maxInFlight: normalized.maxInFlight,
+      inboundAckPolicy: normalized.inboundAckPolicy,
     });
   }
 }
@@ -168,6 +178,7 @@ function validateBasic(fields: {
   topics: readonly string[];
   deliveryMode: DeliveryModeValue;
   overflowAction: OverflowActionValue;
+  inboundAckPolicy: InboundAckPolicyValue;
   maxQueuedMessagesPerClient: number;
   maxQueuedBytesPerClient: number;
   ackTimeoutMs: number;
@@ -196,6 +207,9 @@ function validateBasic(fields: {
   }
   if (fields.overflowAction === null || fields.overflowAction === undefined) {
     throw new Error('overflowAction is required');
+  }
+  if (fields.inboundAckPolicy === null || fields.inboundAckPolicy === undefined) {
+    throw new Error('inboundAckPolicy is required');
   }
   if (fields.maxQueuedMessagesPerClient <= 0) {
     throw new Error('maxQueuedMessagesPerClient must be positive');
