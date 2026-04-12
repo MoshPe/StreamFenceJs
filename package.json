@@ -48,9 +48,6 @@
     "examples:check": "tsc --noEmit --project tsconfig.examples.json",
     "test:package": "npm run build && node test/package/esm-consumer.mjs && node test/package/cjs-consumer.cjs"
   },
-  "dependencies": {
-    "yaml": "^2.4.1"
-  },
   "devDependencies": {
     "@types/node": "^20.12.0",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
