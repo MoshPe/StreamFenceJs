@@ -1,8 +1,11 @@
+import { extname } from 'node:path';
 import { AuthMode, type AuthModeValue } from './AuthMode.js';
 import {
   EngineIoTransportMode,
   type EngineIoTransportModeValue,
 } from './EngineIoTransportMode.js';
+import { loadServerConfig } from './internal/config/ServerConfigLoader.js';
+import { mapServerConfig } from './internal/config/SpecMapper.js';
 import type { NamespaceSpec } from './NamespaceSpec.js';
 import type { ServerEventListener } from './ServerEventListener.js';
 import { NoopServerMetrics, type ServerMetrics } from './ServerMetrics.js';
@@ -29,6 +32,49 @@ export class StreamFenceServerBuilder {
   private metricsValue: ServerMetrics = new NoopServerMetrics();
   private spillRootPathValue = '.streamfence-spill';
   private readonly namespacesValue: NamespaceSpec[] = [];
+
+  // ---------------------------------------------------------------------------
+  // Static factory methods
+  // ---------------------------------------------------------------------------
+
+  static fromYaml(filePath: string, options: { server: string }): StreamFenceServerBuilder {
+    const raw = loadServerConfig(filePath);
+    const spec = mapServerConfig(raw, options.server);
+    return StreamFenceServerBuilder.fromSpec(spec);
+  }
+
+  static fromJson(filePath: string, options: { server: string }): StreamFenceServerBuilder {
+    const ext = extname(filePath).toLowerCase();
+    if (ext !== '.json') {
+      throw new Error(
+        `Unsupported config file extension "${ext}" for fromJson (expected .json): ${filePath}`,
+      );
+    }
+    const raw = loadServerConfig(filePath);
+    const spec = mapServerConfig(raw, options.server);
+    return StreamFenceServerBuilder.fromSpec(spec);
+  }
+
+  private static fromSpec(spec: StreamFenceServerSpec): StreamFenceServerBuilder {
+    const builder = new StreamFenceServerBuilder();
+    builder.hostValue = spec.host;
+    builder.portValue = spec.port;
+    builder.managementPortValue = spec.managementPort;
+    builder.transportModeValue = spec.transportMode;
+    builder.engineIoTransportModeValue = spec.engineIoTransportMode;
+    builder.authModeValue = spec.authMode;
+    builder.tokenValidatorValue = spec.tokenValidator;
+    builder.tlsConfigValue = spec.tlsConfig;
+    builder.metricsValue = spec.metrics;
+    builder.spillRootPathValue = spec.spillRootPath;
+    for (const listener of spec.listeners) {
+      builder.listenersValue.push(listener);
+    }
+    for (const ns of spec.namespaces) {
+      builder.namespacesValue.push(ns);
+    }
+    return builder;
+  }
 
   host(value: string): this {
     this.hostValue = value;

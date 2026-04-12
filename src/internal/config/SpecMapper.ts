@@ -45,8 +45,10 @@ function buildSpec(entry: RawServerEntry, serverName: string): StreamFenceServer
       ? TlsConfig.create({
           certChainPemPath: entry.tls.certChainPemPath,
           privateKeyPemPath: entry.tls.privateKeyPemPath,
-          protocol: entry.tls.protocol,
-          privateKeyPassword: entry.tls.privateKeyPassword,
+          ...(entry.tls.protocol !== undefined && { protocol: entry.tls.protocol }),
+          ...(entry.tls.privateKeyPassword !== undefined && {
+            privateKeyPassword: entry.tls.privateKeyPassword,
+          }),
         })
       : null;
 
