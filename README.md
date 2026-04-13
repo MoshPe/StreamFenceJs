@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/MoshPe/StreamFenceJs/actions/workflows/ci.yml"><img src="https://github.com/MoshPe/StreamFenceJs/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/MoshPe/StreamFenceJs/actions/workflows/codeql.yml"><img src="https://github.com/MoshPe/StreamFenceJs/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
-  <a href="https://codecov.io/gh/MoshPe/StreamFenceJs"><img src="https://codecov.io/gh/MoshPe/StreamFenceJs/branch/main/graph/badge.svg" alt="Codecov"></a>
+  <a href="https://codecov.io/github/MoshPe/StreamFenceJs"><img src="https://codecov.io/github/MoshPe/StreamFenceJs/graph/badge.svg?token=EX8Z73CQZL"/></a>
   <a href="https://www.npmjs.com/package/streamfence-js"><img src="https://img.shields.io/npm/v/streamfence-js" alt="npm"></a>
   <a href="https://github.com/MoshPe/StreamFenceJs/releases"><img src="https://img.shields.io/github/v/release/MoshPe/StreamFenceJs" alt="GitHub Release"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node"></a>
