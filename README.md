@@ -5,6 +5,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/MoshPe/StreamFenceJs/actions/workflows/ci.yml"><img src="https://github.com/MoshPe/StreamFenceJs/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/MoshPe/StreamFenceJs/actions/workflows/codeql.yml"><img src="https://github.com/MoshPe/StreamFenceJs/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node"></a>
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
 </p>
