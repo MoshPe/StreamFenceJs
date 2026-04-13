@@ -1,5 +1,6 @@
 import { OverflowAction } from '../../OverflowAction.js';
 import type { TopicPolicy } from '../config/TopicPolicy.js';
+import type { DiskSpillQueue } from './DiskSpillQueue.js';
 import { createEnqueueResult, EnqueueStatus, type EnqueueResult } from './EnqueueResult.js';
 import type { LaneEntry } from './LaneEntry.js';
 
@@ -7,7 +8,10 @@ export class ClientLane {
   private readonly queue: LaneEntry[] = [];
   private queuedBytes = 0;
 
-  constructor(private readonly policy: TopicPolicy) {}
+  constructor(
+    private readonly policy: TopicPolicy,
+    private readonly spillQueue?: DiskSpillQueue,
+  ) {}
 
   enqueue(entry: LaneEntry): EnqueueResult {
     if (entry.estimatedBytes > this.policy.maxQueuedBytesPerClient) {
@@ -66,9 +70,16 @@ export class ClientLane {
         });
 
       case OverflowAction.SPILL_TO_DISK:
+        if (this.spillQueue === undefined) {
+          return createEnqueueResult({
+            status: EnqueueStatus.REJECTED,
+            reason: 'SPILL_TO_DISK: no spill queue configured',
+          });
+        }
+        this.spillQueue.spill(entry);
         return createEnqueueResult({
-          status: EnqueueStatus.REJECTED,
-          reason: 'SPILL_TO_DISK is not supported',
+          status: EnqueueStatus.SPILLED,
+          reason: 'spilled to disk',
         });
 
       default:
@@ -80,9 +91,15 @@ export class ClientLane {
   }
 
   poll(): LaneEntry | undefined {
-    const entry = this.queue.shift();
+    let entry = this.queue.shift();
     if (entry === undefined) {
-      return undefined;
+      if (this.spillQueue !== undefined && this.spillQueue.hasSpilled()) {
+        this.refillFromDisk();
+        entry = this.queue.shift();
+      }
+      if (entry === undefined) {
+        return undefined;
+      }
     }
 
     this.queuedBytes -= entry.estimatedBytes;
@@ -99,11 +116,22 @@ export class ClientLane {
   }
 
   firstPendingSend(): LaneEntry | undefined {
-    return this.queue.find((entry) => !entry.awaiting);
+    const found = this.queue.find((entry) => !entry.awaiting);
+    if (found !== undefined) {
+      return found;
+    }
+    if (this.spillQueue !== undefined && this.spillQueue.hasSpilled()) {
+      this.refillFromDisk();
+      return this.queue.find((entry) => !entry.awaiting);
+    }
+    return undefined;
   }
 
   hasPendingSend(): boolean {
-    return this.firstPendingSend() !== undefined;
+    if (this.queue.some((entry) => !entry.awaiting)) {
+      return true;
+    }
+    return this.spillQueue !== undefined && this.spillQueue.hasSpilled();
   }
 
   markAwaiting(entry: LaneEntry): void {
@@ -143,6 +171,20 @@ export class ClientLane {
 
   get inFlightCount(): number {
     return this.queue.reduce((total, entry) => (entry.awaiting ? total + 1 : total), 0);
+  }
+
+  clearSpill(): void {
+    this.spillQueue?.clear();
+  }
+
+  private refillFromDisk(): void {
+    if (this.spillQueue === undefined || !this.spillQueue.hasSpilled()) {
+      return;
+    }
+    const recovered = this.spillQueue.recover(this.policy.maxQueuedMessagesPerClient);
+    for (const entry of recovered) {
+      this.accept(entry);
+    }
   }
 
   private fits(entryBytes: number): boolean {

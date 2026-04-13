@@ -2,6 +2,8 @@ import type { TopicPolicy } from '../config/TopicPolicy.js';
 import type { TransportClient } from '../transport/TransportClient.js';
 import { ClientLane } from './ClientLane.js';
 
+export type ClientLaneFactory = (topic: string, policy: TopicPolicy) => ClientLane;
+
 export class ClientSessionState {
   private readonly subscriptions = new Set<string>();
   private readonly lanes = new Map<string, ClientLane>();
@@ -11,6 +13,7 @@ export class ClientSessionState {
     readonly clientId: string,
     readonly namespace: string,
     readonly client: TransportClient,
+    private readonly laneFactory?: ClientLaneFactory,
   ) {}
 
   subscribe(topic: string): void {
@@ -39,7 +42,7 @@ export class ClientSessionState {
       return undefined;
     }
 
-    const created = new ClientLane(policy);
+    const created = this.laneFactory?.(topic, policy) ?? new ClientLane(policy);
     this.lanes.set(topic, created);
     return created;
   }
@@ -59,5 +62,11 @@ export class ClientSessionState {
 
   isDraining(topic: string): boolean {
     return this.drainingTopics.has(topic);
+  }
+
+  dispose(): void {
+    for (const lane of this.lanes.values()) {
+      lane.clearSpill();
+    }
   }
 }

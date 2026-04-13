@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { OverflowAction } from './OverflowAction.js';
 import type { InboundMessageContext } from './InboundMessageContext.js';
 import type { ServerEventListener } from './ServerEventListener.js';
 import type { ServerMetrics } from './ServerMetrics.js';
@@ -5,6 +7,9 @@ import type { StreamFenceServerSpec } from './StreamFenceServerSpec.js';
 import { topicPoliciesFromNamespaceSpec } from './internal/config/TopicPolicy.js';
 import { AckTracker } from './internal/delivery/AckTracker.js';
 import { ClientSessionRegistry } from './internal/delivery/ClientSessionRegistry.js';
+import type { ClientLaneFactory } from './internal/delivery/ClientSessionState.js';
+import { ClientLane } from './internal/delivery/ClientLane.js';
+import { DiskSpillQueue } from './internal/delivery/DiskSpillQueue.js';
 import { RetryService } from './internal/delivery/RetryService.js';
 import { TopicDispatcher } from './internal/delivery/TopicDispatcher.js';
 import { TopicRegistry } from './internal/delivery/TopicRegistry.js';
@@ -77,6 +82,7 @@ export class StreamFenceServer {
         topicRegistry: this.topicRegistry!,
         sessionRegistry: this.sessionRegistry!,
         dispatcher: this.dispatcher!,
+        laneFactory: (clientId, namespace) => this.createLaneFactory(clientId, namespace),
       });
       namespaceHandler.start();
       return namespaceHandler;
@@ -196,6 +202,35 @@ export class StreamFenceServer {
 
   get managementPort(): number | null {
     return this.managementServer?.port ?? null;
+  }
+
+  private createLaneFactory(clientId: string, namespace: string): ClientLaneFactory {
+    return (topic, policy) => {
+      const spillQueue =
+        policy.overflowAction === OverflowAction.SPILL_TO_DISK
+          ? new DiskSpillQueue(this.spillDirectory(namespace, clientId, topic))
+          : undefined;
+
+      return new ClientLane(policy, spillQueue);
+    };
+  }
+
+  private spillDirectory(namespace: string, clientId: string, topic: string): string {
+    const namespaceSegments = namespace
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => this.sanitizePathSegment(segment));
+
+    return join(
+      this.spec.spillRootPath,
+      ...namespaceSegments,
+      this.sanitizePathSegment(clientId),
+      this.sanitizePathSegment(topic),
+    );
+  }
+
+  private sanitizePathSegment(value: string): string {
+    return value.replace(/[\\/:"*?<>|]/g, '_');
   }
 
   private emitServerStarting(port: number, managementPort: number): void {
