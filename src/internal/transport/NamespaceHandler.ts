@@ -1,7 +1,7 @@
 import type { Namespace, Socket } from 'socket.io';
 import type { TopicRegistry } from '../delivery/TopicRegistry.js';
 import type { ClientSessionRegistry } from '../delivery/ClientSessionRegistry.js';
-import { ClientSessionState } from '../delivery/ClientSessionState.js';
+import { ClientSessionState, type ClientLaneFactory } from '../delivery/ClientSessionState.js';
 import type { TopicDispatcher } from '../delivery/TopicDispatcher.js';
 import type { AckPayload } from '../protocol/AckPayload.js';
 import type { PublishRequest } from '../protocol/PublishRequest.js';
@@ -21,6 +21,7 @@ export class NamespaceHandler {
     topicRegistry: TopicRegistry;
     sessionRegistry: ClientSessionRegistry;
     dispatcher: TopicDispatcher;
+    laneFactory?: (clientId: string, namespace: string) => ClientLaneFactory;
   }) {}
 
   start(): void {
@@ -50,6 +51,7 @@ export class NamespaceHandler {
       socket.id,
       this.options.namespacePath,
       new ConnectedClientAdapter(socket),
+      this.options.laneFactory?.(socket.id, this.options.namespacePath),
     );
 
     this.options.sessionRegistry.register(session);

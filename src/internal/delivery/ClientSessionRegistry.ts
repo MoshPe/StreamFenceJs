@@ -1,4 +1,4 @@
-import { ClientSessionState } from './ClientSessionState.js';
+import type { ClientSessionState } from './ClientSessionState.js';
 
 export class ClientSessionRegistry {
   private readonly sessions = new Map<string, ClientSessionState>();
@@ -14,6 +14,7 @@ export class ClientSessionRegistry {
       for (const topic of state.subscribedTopics()) {
         this.removeSubscription(state.namespace, topic, clientId);
       }
+      state.dispose();
     }
 
     this.sessions.delete(clientId);
