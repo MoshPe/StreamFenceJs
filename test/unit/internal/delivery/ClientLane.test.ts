@@ -9,6 +9,28 @@ import { DiskSpillQueue } from '../../../../src/internal/delivery/DiskSpillQueue
 import { makeLaneEntry, makePublishedMessage, makeTopicPolicy } from './helpers.js';
 
 describe('ClientLane', () => {
+  it('replaces the queued snapshot under SNAPSHOT_ONLY', () => {
+    const lane = new ClientLane(
+      makeTopicPolicy({
+        overflowAction: OverflowAction.SNAPSHOT_ONLY,
+        maxQueuedMessagesPerClient: 4,
+      }),
+    );
+
+    expect(
+      lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) }))
+        .status,
+    ).toBe(EnqueueStatus.REPLACED_SNAPSHOT);
+    expect(
+      lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm2' }) }))
+        .status,
+    ).toBe(EnqueueStatus.REPLACED_SNAPSHOT);
+
+    expect(lane.peek()?.messageId).toBe('m2');
+    expect(lane.poll()?.messageId).toBe('m2');
+    expect(lane.poll()).toBeUndefined();
+  });
+
   it('accepts when under limits and allows polling', () => {
     const lane = new ClientLane(
       makeTopicPolicy({ maxQueuedMessagesPerClient: 2, maxQueuedBytesPerClient: 128 }),
@@ -78,6 +100,31 @@ describe('ClientLane', () => {
     expect(lane.peek()?.messageId).toBe('m2');
   });
 
+  it('does not coalesce over awaiting entries and rejects when no other match exists', () => {
+    const lane = new ClientLane(
+      makeTopicPolicy({
+        overflowAction: OverflowAction.COALESCE,
+        maxQueuedMessagesPerClient: 1,
+      }),
+    );
+
+    const first = makeLaneEntry({
+      publishedMessage: makePublishedMessage({ messageId: 'm1', coalesceKey: 'snapshot' }),
+    });
+    lane.enqueue(first);
+    lane.markAwaiting(first);
+
+    const result = lane.enqueue(
+      makeLaneEntry({
+        publishedMessage: makePublishedMessage({ messageId: 'm2', coalesceKey: 'snapshot' }),
+      }),
+    );
+
+    expect(result.status).toBe(EnqueueStatus.REJECTED);
+    expect(result.reason).toBe('queue full and no coalesce match');
+    expect(lane.peek()?.messageId).toBe('m1');
+  });
+
   it('tracks awaiting entries and supports remove/find', () => {
     const lane = new ClientLane(makeTopicPolicy());
     const entry = makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) });
@@ -93,6 +140,37 @@ describe('ClientLane', () => {
 
     expect(removed).toBe(entry);
     expect(lane.inFlightCount).toBe(0);
+  });
+
+  it('returns undefined when removing an unknown message id', () => {
+    const lane = new ClientLane(makeTopicPolicy());
+
+    lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) }));
+
+    expect(lane.removeByMessageId('missing')).toBeUndefined();
+    expect(lane.peek()?.messageId).toBe('m1');
+  });
+
+  it('rejects spill overflow when no spill queue is configured', () => {
+    const lane = new ClientLane(
+      makeTopicPolicy({
+        overflowAction: OverflowAction.SPILL_TO_DISK,
+        maxQueuedMessagesPerClient: 1,
+      }),
+    );
+
+    expect(
+      lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) }))
+        .status,
+    ).toBe(EnqueueStatus.ACCEPTED);
+
+    const result = lane.enqueue(
+      makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm2' }) }),
+    );
+
+    expect(result.status).toBe(EnqueueStatus.REJECTED);
+    expect(result.reason).toBe('SPILL_TO_DISK: no spill queue configured');
+    expect(lane.peek()?.messageId).toBe('m1');
   });
 
   it('spills overflow entries to disk and replays them in FIFO order', () => {
@@ -119,6 +197,33 @@ describe('ClientLane', () => {
       expect(lane.poll()?.messageId).toBe('m2');
       expect(lane.poll()?.messageId).toBe('m3');
       expect(lane.poll()).toBeUndefined();
+    } finally {
+      rmSync(spillRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('recovers spilled entries through firstPendingSend when memory is empty', () => {
+    const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-client-lane-recover-'));
+
+    try {
+      const lane = new ClientLane(
+        makeTopicPolicy({
+          overflowAction: OverflowAction.SPILL_TO_DISK,
+          maxQueuedMessagesPerClient: 1,
+        }),
+        new DiskSpillQueue(spillRoot),
+      );
+
+      lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) }));
+      lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm2' }) }));
+
+      expect(lane.hasPendingSend()).toBe(true);
+      expect(lane.poll()?.messageId).toBe('m1');
+      expect(lane.peek()).toBeUndefined();
+
+      const recovered = lane.firstPendingSend();
+      expect(recovered?.messageId).toBe('m2');
+      expect(lane.peek()?.messageId).toBe('m2');
     } finally {
       rmSync(spillRoot, { force: true, recursive: true });
     }

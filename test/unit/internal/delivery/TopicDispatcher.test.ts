@@ -67,6 +67,23 @@ async function flushMicrotaskQueue(): Promise<void> {
   await Promise.resolve();
 }
 
+function makeThrowingClient(clientId: string, options?: { throwOnCalls?: number[] }) {
+  const events: Array<{ eventName: string; args: readonly unknown[] }> = [];
+  let callCount = 0;
+
+  return {
+    clientId,
+    events,
+    sendEvent(eventName: string, args: readonly unknown[]): void {
+      callCount += 1;
+      if (options?.throwOnCalls?.includes(callCount) === true) {
+        throw new Error(`send failure on call ${callCount}`);
+      }
+      events.push({ eventName, args: [...args] });
+    },
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -191,6 +208,76 @@ describe('TopicDispatcher', () => {
     dispatcher.close();
   });
 
+  it('swallows BEST_EFFORT send failures and continues draining later entries', async () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({ topic: 'snapshot', deliveryMode: DeliveryMode.BEST_EFFORT }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const client = makeThrowingClient('client-1', { throwOnCalls: [1] });
+    const session = new ClientSessionState('client-1', '/feed', client);
+    sessionRegistry.register(session);
+    sessionRegistry.subscribe(session, 'snapshot');
+
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics: makeMetrics(),
+    });
+
+    dispatcher.publish('/feed', 'snapshot', { value: 1 });
+    dispatcher.publish('/feed', 'snapshot', { value: 2 });
+    await flushMicrotaskQueue();
+
+    expect(client.events).toHaveLength(1);
+    expect(client.events[0]?.args[0]).toEqual({ value: 2 });
+
+    dispatcher.close();
+  });
+
+  it('removes failed AT_LEAST_ONCE sends and continues with the next entry', async () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({
+        topic: 'snapshot',
+        deliveryMode: DeliveryMode.AT_LEAST_ONCE,
+        maxInFlight: 1,
+        ackTimeoutMs: 100,
+        maxRetries: 1,
+      }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const client = makeThrowingClient('client-1', { throwOnCalls: [1] });
+    const session = new ClientSessionState('client-1', '/feed', client);
+    sessionRegistry.register(session);
+    sessionRegistry.subscribe(session, 'snapshot');
+
+    const ackTracker = new AckTracker();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker,
+      retryService: new RetryService(ackTracker, 10_000),
+      metrics: makeMetrics(),
+    });
+
+    dispatcher.publish('/feed', 'snapshot', { value: 1 });
+    dispatcher.publish('/feed', 'snapshot', { value: 2 });
+    await flushMicrotaskQueue();
+
+    expect(client.events).toHaveLength(1);
+    expect(client.events[0]?.args[0]).toEqual({ value: 2 });
+    expect(session.lane('snapshot')?.findByMessageId('msg-1')).toBeUndefined();
+    expect(session.lane('snapshot')?.findByMessageId('msg-2')).toBeDefined();
+    expect(ackTracker.pendingCount).toBe(1);
+
+    dispatcher.close();
+  });
+
   it('records overflow details and replays spilled messages when disk spill is enabled', async () => {
     const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-spill-dispatcher-'));
 
@@ -298,6 +385,52 @@ describe('TopicDispatcher', () => {
     dispatcher.close();
   });
 
+  it('throws when publishing to an unknown topic policy', () => {
+    const dispatcher = new TopicDispatcher({
+      topicRegistry: new TopicRegistry(),
+      sessionRegistry: new ClientSessionRegistry(),
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics: makeMetrics(),
+    });
+
+    expect(() => dispatcher.publish('/feed', 'unknown', { value: 1 })).toThrow(
+      'unknown topic policy for /feed:unknown',
+    );
+
+    dispatcher.close();
+  });
+
+  it('falls back to a 1-byte estimate when payload serialization fails', async () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({ topic: 'snapshot', deliveryMode: DeliveryMode.BEST_EFFORT }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const { client } = setupSession(sessionRegistry);
+
+    const metrics = makeMetrics();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics,
+    });
+
+    const payload: { self?: unknown } = {};
+    payload.self = payload;
+
+    dispatcher.publish('/feed', 'snapshot', payload);
+    await flushMicrotaskQueue();
+
+    expect(client.events).toHaveLength(1);
+    expect(metrics.recordPublish).toHaveBeenCalledWith('/feed', 'snapshot', 1);
+
+    dispatcher.close();
+  });
+
   it('acknowledge is a no-op when the session or lane is missing', () => {
     const topicRegistry = new TopicRegistry();
     topicRegistry.register(makeTopicPolicy({ topic: 'snapshot' }));
@@ -323,6 +456,41 @@ describe('TopicDispatcher', () => {
       dispatcher.acknowledge('client-1', '/feed', 'snapshot', 'msg-1'),
     ).not.toThrow();
     expect(ackTracker.pendingCount).toBe(0);
+
+    dispatcher.close();
+  });
+
+  it('ignores disconnect and unsubscribe requests when the target session does not match', () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(makeTopicPolicy({ namespace: '/other', topic: 'snapshot' }));
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const session = new ClientSessionState('client-1', '/other', makeFakeTransportClient('client-1'));
+    session.subscribe('snapshot');
+    sessionRegistry.register(session);
+
+    const onClientDisconnected = vi.fn();
+    const onUnsubscribed = vi.fn();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics: makeMetrics(),
+      eventPublisher: new ServerEventPublisher({
+        onClientDisconnected,
+        onUnsubscribed,
+      }),
+    });
+
+    dispatcher.onClientDisconnected('missing');
+    dispatcher.onClientUnsubscribed('missing', '/feed', 'snapshot');
+    dispatcher.onClientUnsubscribed('client-1', '/feed', 'snapshot');
+
+    expect(sessionRegistry.get('client-1')).toBe(session);
+    expect(session.isSubscribed('snapshot')).toBe(true);
+    expect(onClientDisconnected).not.toHaveBeenCalled();
+    expect(onUnsubscribed).not.toHaveBeenCalled();
 
     dispatcher.close();
   });
