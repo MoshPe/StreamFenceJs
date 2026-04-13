@@ -1,4 +1,4 @@
-# StreamFence - Embeddable JS Socket.IO Server Library
+# StreamFenceJs - Embeddable JS Socket.IO Server Library
 
 <p align="center">
   <img src="assets/logo.png" alt="StreamFence logo" width="320">
