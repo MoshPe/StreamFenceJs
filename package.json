@@ -1,6 +1,6 @@
 {
   "name": "streamfence-js",
-  "version": "0.1.0-alpha.0",
+  "version": "1.0.0",
   "description": "Production-ready delivery control for Node.js Socket.IO servers - backpressure, retries, queue protection.",
   "license": "Apache-2.0",
   "author": "MoshPe",
