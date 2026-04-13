@@ -28,4 +28,53 @@ describe('ManagementHttpServer', () => {
     expect(metricsResponse.status).toBe(200);
     expect(await metricsResponse.text()).toContain('streamfence_connections_total');
   });
+
+  it('returns 404 for unknown routes', async () => {
+    server = new ManagementHttpServer({
+      host: '127.0.0.1',
+      port: 0,
+      healthProvider: () => ({ status: 'UP', uptimeMs: 123 }),
+      metricsProvider: () => 'ok\n',
+    });
+
+    await server.start();
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/unknown`);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('not found');
+  });
+
+  it('returns 500 when a provider throws', async () => {
+    server = new ManagementHttpServer({
+      host: '127.0.0.1',
+      port: 0,
+      healthProvider: () => Promise.reject(new Error('boom')),
+      metricsProvider: () => 'ok\n',
+    });
+
+    await server.start();
+
+    const response = await fetch(`http://127.0.0.1:${server.port}/health`);
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('internal server error');
+  });
+
+  it('start and stop are idempotent', async () => {
+    server = new ManagementHttpServer({
+      host: '127.0.0.1',
+      port: 0,
+      healthProvider: () => ({ status: 'UP', uptimeMs: 123 }),
+      metricsProvider: () => 'ok\n',
+    });
+
+    await server.start();
+    const boundPort = server.port;
+
+    await expect(server.start()).resolves.toBeUndefined();
+    expect(server.port).toBe(boundPort);
+
+    await expect(server.stop()).resolves.toBeUndefined();
+    await expect(server.stop()).resolves.toBeUndefined();
+    expect(server.port).toBe(0);
+  });
 });
