@@ -262,4 +262,164 @@ describe('TopicDispatcher', () => {
       rmSync(spillRoot, { force: true, recursive: true });
     }
   });
+
+  it('publishTo ignores missing, wrong-namespace, and unsubscribed sessions', () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(makeTopicPolicy({ topic: 'snapshot' }));
+
+    const sessionRegistry = new ClientSessionRegistry();
+
+    const otherNamespaceClient = makeFakeTransportClient('client-2');
+    const otherNamespaceSession = new ClientSessionState('client-2', '/other', otherNamespaceClient);
+    otherNamespaceSession.subscribe('snapshot');
+    sessionRegistry.register(otherNamespaceSession);
+
+    const unsubscribedClient = makeFakeTransportClient('client-3');
+    const unsubscribedSession = new ClientSessionState('client-3', '/feed', unsubscribedClient);
+    sessionRegistry.register(unsubscribedSession);
+
+    const metrics = makeMetrics();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics,
+    });
+
+    dispatcher.publishTo('/feed', 'missing', 'snapshot', { value: 1 });
+    dispatcher.publishTo('/feed', 'client-2', 'snapshot', { value: 2 });
+    dispatcher.publishTo('/feed', 'client-3', 'snapshot', { value: 3 });
+
+    expect(otherNamespaceClient.events).toHaveLength(0);
+    expect(unsubscribedClient.events).toHaveLength(0);
+    expect(metrics.recordPublish).not.toHaveBeenCalled();
+
+    dispatcher.close();
+  });
+
+  it('acknowledge is a no-op when the session or lane is missing', () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(makeTopicPolicy({ topic: 'snapshot' }));
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const session = new ClientSessionState('client-1', '/feed', makeFakeTransportClient('client-1'));
+    session.subscribe('snapshot');
+    sessionRegistry.register(session);
+
+    const ackTracker = new AckTracker();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker,
+      retryService: new RetryService(ackTracker, 10_000),
+      metrics: makeMetrics(),
+    });
+
+    expect(() =>
+      dispatcher.acknowledge('missing', '/feed', 'snapshot', 'msg-1'),
+    ).not.toThrow();
+    expect(() =>
+      dispatcher.acknowledge('client-1', '/feed', 'snapshot', 'msg-1'),
+    ).not.toThrow();
+    expect(ackTracker.pendingCount).toBe(0);
+
+    dispatcher.close();
+  });
+
+  it('processRetries tolerates expired retries whose session or lane no longer exists', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({
+        topic: 'snapshot',
+        deliveryMode: DeliveryMode.AT_LEAST_ONCE,
+        maxInFlight: 1,
+        ackTimeoutMs: 10,
+        maxRetries: 1,
+      }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const missingSessionSetup = setupSession(sessionRegistry, 'client-missing');
+    const missingLaneSetup = setupSession(sessionRegistry, 'client-lane-missing');
+
+    const ackTracker = new AckTracker();
+    const metrics = makeMetrics();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker,
+      retryService: new RetryService(ackTracker, 10_000),
+      metrics,
+    });
+
+    dispatcher.publishTo('/feed', 'client-missing', 'snapshot', { value: 1 });
+    dispatcher.publishTo('/feed', 'client-lane-missing', 'snapshot', { value: 2 });
+    await flushMicrotaskQueue();
+
+    sessionRegistry.remove('client-missing');
+
+    const replacementSession = new ClientSessionState(
+      'client-lane-missing',
+      '/feed',
+      makeFakeTransportClient('client-lane-missing'),
+    );
+    replacementSession.subscribe('snapshot');
+    sessionRegistry.register(replacementSession);
+
+    vi.advanceTimersByTime(20);
+    dispatcher.processRetries();
+    await flushMicrotaskQueue();
+
+    expect(metrics.recordRetry).toHaveBeenCalledTimes(2);
+    expect(missingSessionSetup.client.events).toHaveLength(1);
+    expect(missingLaneSetup.client.events).toHaveLength(1);
+
+    dispatcher.close();
+  });
+
+  it('drops exhausted retry entries from the lane', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({
+        topic: 'snapshot',
+        deliveryMode: DeliveryMode.AT_LEAST_ONCE,
+        maxInFlight: 1,
+        ackTimeoutMs: 10,
+        maxRetries: 0,
+      }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const { session } = setupSession(sessionRegistry);
+
+    const ackTracker = new AckTracker();
+    const metrics = makeMetrics();
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker,
+      retryService: new RetryService(ackTracker, 10_000),
+      metrics,
+    });
+
+    dispatcher.publish('/feed', 'snapshot', { value: 1 });
+    await flushMicrotaskQueue();
+    expect(session.lane('snapshot')?.peek()).toBeDefined();
+
+    vi.advanceTimersByTime(20);
+    dispatcher.processRetries();
+
+    expect(metrics.recordRetryExhausted).toHaveBeenCalledWith('/feed', 'snapshot');
+    expect(session.lane('snapshot')?.peek()).toBeUndefined();
+    expect(ackTracker.pendingCount).toBe(0);
+
+    dispatcher.close();
+  });
 });
