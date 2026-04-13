@@ -2,7 +2,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 
 export class ManagementHttpServer {
-  private server = createServer(this.routeRequest.bind(this));
+  private server = createServer((request, response) => {
+    void this.routeRequest(request, response).catch(() => {
+      if (!response.headersSent) {
+        response.statusCode = 500;
+      }
+      if (!response.writableEnded) {
+        response.end('internal server error');
+      }
+    });
+  });
   private started = false;
   private boundPort = 0;
 

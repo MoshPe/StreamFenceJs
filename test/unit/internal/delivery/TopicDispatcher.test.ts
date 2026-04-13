@@ -1,15 +1,37 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { DeliveryMode } from '../../../../src/DeliveryMode.js';
+import { OverflowAction } from '../../../../src/OverflowAction.js';
 import type { ServerMetrics } from '../../../../src/ServerMetrics.js';
 import { AckTracker } from '../../../../src/internal/delivery/AckTracker.js';
+import { ClientLane } from '../../../../src/internal/delivery/ClientLane.js';
 import { ClientSessionRegistry } from '../../../../src/internal/delivery/ClientSessionRegistry.js';
 import { ClientSessionState } from '../../../../src/internal/delivery/ClientSessionState.js';
+import { DiskSpillQueue } from '../../../../src/internal/delivery/DiskSpillQueue.js';
 import { RetryService } from '../../../../src/internal/delivery/RetryService.js';
 import { TopicDispatcher } from '../../../../src/internal/delivery/TopicDispatcher.js';
 import { TopicRegistry } from '../../../../src/internal/delivery/TopicRegistry.js';
+import { ServerEventPublisher } from '../../../../src/internal/observability/ServerEventPublisher.js';
 import { makeFakeTransportClient, makeTopicPolicy } from './helpers.js';
 
-function makeMetrics(): ServerMetrics {
+type MetricsSpies = {
+  recordConnect: ReturnType<typeof vi.fn>;
+  recordDisconnect: ReturnType<typeof vi.fn>;
+  recordPublish: ReturnType<typeof vi.fn>;
+  recordReceived: ReturnType<typeof vi.fn>;
+  recordQueueOverflow: ReturnType<typeof vi.fn>;
+  recordRetry: ReturnType<typeof vi.fn>;
+  recordRetryExhausted: ReturnType<typeof vi.fn>;
+  recordDropped: ReturnType<typeof vi.fn>;
+  recordCoalesced: ReturnType<typeof vi.fn>;
+  recordAuthRejected: ReturnType<typeof vi.fn>;
+  recordAuthRateLimited: ReturnType<typeof vi.fn>;
+  scrape: ReturnType<typeof vi.fn>;
+};
+
+function makeMetrics(): ServerMetrics & MetricsSpies {
   return {
     recordConnect: vi.fn(),
     recordDisconnect: vi.fn(),
@@ -26,9 +48,13 @@ function makeMetrics(): ServerMetrics {
   };
 }
 
-function setupSession(registry: ClientSessionRegistry, clientId = 'client-1') {
+function setupSession(
+  registry: ClientSessionRegistry,
+  clientId = 'client-1',
+  laneFactory?: ConstructorParameters<typeof ClientSessionState>[3],
+) {
   const client = makeFakeTransportClient(clientId);
-  const session = new ClientSessionState(clientId, '/feed', client);
+  const session = new ClientSessionState(clientId, '/feed', client, laneFactory);
 
   registry.register(session);
   registry.subscribe(session, 'snapshot');
@@ -58,6 +84,7 @@ describe('TopicDispatcher', () => {
     const ackTracker = new AckTracker();
     const retryService = new RetryService(ackTracker, 10_000);
     const metrics = makeMetrics();
+    const recordPublish = metrics.recordPublish;
 
     const dispatcher = new TopicDispatcher({
       topicRegistry,
@@ -72,7 +99,7 @@ describe('TopicDispatcher', () => {
 
     expect(client.events).toHaveLength(1);
     expect(client.events[0]?.eventName).toBe('snapshot');
-    expect(metrics.recordPublish).toHaveBeenCalledWith('/feed', 'snapshot', expect.any(Number));
+    expect(recordPublish).toHaveBeenCalledWith('/feed', 'snapshot', expect.any(Number));
 
     dispatcher.close();
   });
@@ -141,6 +168,7 @@ describe('TopicDispatcher', () => {
     const ackTracker = new AckTracker();
     const retryService = new RetryService(ackTracker, 10_000);
     const metrics = makeMetrics();
+    const recordRetry = metrics.recordRetry;
 
     const dispatcher = new TopicDispatcher({
       topicRegistry,
@@ -158,8 +186,80 @@ describe('TopicDispatcher', () => {
     await flushMicrotaskQueue();
 
     expect(client.events.length).toBeGreaterThanOrEqual(2);
-    expect(metrics.recordRetry).toHaveBeenCalledWith('/feed', 'snapshot');
+    expect(recordRetry).toHaveBeenCalledWith('/feed', 'snapshot');
 
     dispatcher.close();
+  });
+
+  it('records overflow details and replays spilled messages when disk spill is enabled', async () => {
+    const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-spill-dispatcher-'));
+
+    try {
+      const topicRegistry = new TopicRegistry();
+      topicRegistry.register(
+        makeTopicPolicy({
+          topic: 'snapshot',
+          deliveryMode: DeliveryMode.BEST_EFFORT,
+          overflowAction: OverflowAction.SPILL_TO_DISK,
+          maxQueuedMessagesPerClient: 1,
+          maxQueuedBytesPerClient: 1024,
+        }),
+      );
+
+      const sessionRegistry = new ClientSessionRegistry();
+      const { client } = setupSession(sessionRegistry, 'client-1', (topic, policy) => {
+        return new ClientLane(policy, new DiskSpillQueue(join(spillRoot, 'feed', 'client-1', topic)));
+      });
+
+      const ackTracker = new AckTracker();
+      const retryService = new RetryService(ackTracker, 10_000);
+      const metrics = makeMetrics();
+      const recordQueueOverflow = metrics.recordQueueOverflow;
+      const onQueueOverflow = vi.fn();
+
+      const dispatcher = new TopicDispatcher({
+        topicRegistry,
+        sessionRegistry,
+        ackTracker,
+        retryService,
+        metrics,
+        eventPublisher: new ServerEventPublisher({
+          onQueueOverflow,
+        }),
+      });
+
+      dispatcher.publish('/feed', 'snapshot', { value: 1 });
+      dispatcher.publish('/feed', 'snapshot', { value: 2 });
+      dispatcher.publish('/feed', 'snapshot', { value: 3 });
+
+      expect(
+        readdirSync(join(spillRoot, 'feed', 'client-1', 'snapshot')).filter((file) =>
+          file.endsWith('.json'),
+        ),
+      ).toHaveLength(2);
+
+      await flushMicrotaskQueue();
+
+      expect(client.events.map((event) => event.args[0])).toEqual([
+        { value: 1 },
+        { value: 2 },
+        { value: 3 },
+      ]);
+      expect(recordQueueOverflow).toHaveBeenCalledWith(
+        '/feed',
+        'snapshot',
+        'spilled to disk',
+      );
+      expect(onQueueOverflow).toHaveBeenCalledWith({
+        namespace: '/feed',
+        clientId: 'client-1',
+        topic: 'snapshot',
+        reason: 'spilled to disk',
+      });
+
+      dispatcher.close();
+    } finally {
+      rmSync(spillRoot, { force: true, recursive: true });
+    }
   });
 });

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ClientSessionState } from '../../../../src/internal/delivery/ClientSessionState.js';
+import { ClientLane } from '../../../../src/internal/delivery/ClientLane.js';
 import { makeFakeTransportClient, makeTopicPolicy } from './helpers.js';
 
 describe('ClientSessionState', () => {
@@ -40,5 +41,25 @@ describe('ClientSessionState', () => {
 
     expect(session.isDraining('snapshot')).toBe(false);
     expect(session.startDrain('snapshot')).toBe(true);
+  });
+
+  it('uses the injected lane factory when creating topic lanes', () => {
+    const laneFactory = vi.fn((topic: string, policy: ReturnType<typeof makeTopicPolicy>) => {
+      expect(topic).toBe('snapshot');
+      return new ClientLane(policy);
+    });
+
+    const session = new ClientSessionState(
+      'client-1',
+      '/feed',
+      makeFakeTransportClient('client-1'),
+      laneFactory,
+    );
+    const policy = makeTopicPolicy({ namespace: '/feed', topic: 'snapshot' });
+
+    const lane = session.lane('snapshot', policy);
+
+    expect(laneFactory).toHaveBeenCalledWith('snapshot', policy);
+    expect(session.lane('snapshot')).toBe(lane);
   });
 });

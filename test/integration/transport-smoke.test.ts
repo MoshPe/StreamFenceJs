@@ -25,7 +25,7 @@ describe('transport smoke', () => {
         return;
       }
 
-      ioServer.close(() => resolve());
+      void ioServer.close(() => resolve());
     });
   });
 
