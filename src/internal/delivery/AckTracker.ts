@@ -64,12 +64,7 @@ export class AckTracker {
   collectExpired(now: number = Date.now()): RetryDecision[] {
     const decisions: RetryDecision[] = [];
 
-    while (true) {
-      const head = this.heapPeek();
-      if (head === undefined || head.deadline > now) {
-        break;
-      }
-
+    for (let head = this.heapPeek(); head !== undefined && head.deadline <= now; head = this.heapPeek()) {
       const handle = this.heapPop();
       if (handle === undefined) {
         break;
@@ -212,7 +207,7 @@ export class AckTracker {
   private heapBubbleDown(startIndex: number): void {
     let index = startIndex;
 
-    while (true) {
+    for (;;) {
       const leftIndex = index * 2 + 1;
       const rightIndex = leftIndex + 1;
       let smallestIndex = index;

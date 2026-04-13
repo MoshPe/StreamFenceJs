@@ -45,7 +45,7 @@ export class SocketServerBootstrap {
   async stop(): Promise<void> {
     if (this.socketServer !== undefined) {
       await new Promise<void>((resolve) => {
-        this.socketServer!.close(() => resolve());
+        void this.socketServer!.close(() => resolve());
       });
       this.socketServer = undefined;
     }

@@ -4,14 +4,14 @@ import type { TopicPolicy } from '../config/TopicPolicy.js';
 import { ServerEventPublisher } from '../observability/ServerEventPublisher.js';
 import { createOutboundTopicMessage } from '../protocol/OutboundTopicMessage.js';
 import { createTopicMessageMetadata } from '../protocol/TopicMessageMetadata.js';
-import { AckTracker } from './AckTracker.js';
-import { ClientSessionRegistry } from './ClientSessionRegistry.js';
-import { ClientSessionState } from './ClientSessionState.js';
+import type { AckTracker } from './AckTracker.js';
+import type { ClientSessionRegistry } from './ClientSessionRegistry.js';
+import type { ClientSessionState } from './ClientSessionState.js';
 import { LaneEntry } from './LaneEntry.js';
 import { createPublishedMessage } from './PublishedMessage.js';
 import { RetryAction } from './RetryDecision.js';
-import { RetryService } from './RetryService.js';
-import { TopicRegistry } from './TopicRegistry.js';
+import type { RetryService } from './RetryService.js';
+import type { TopicRegistry } from './TopicRegistry.js';
 import { EnqueueStatus } from './EnqueueResult.js';
 
 export class TopicDispatcher {
@@ -203,9 +203,15 @@ export class TopicDispatcher {
 
     const enqueueResult = lane.enqueue(entry);
 
-    if (enqueueResult.status === EnqueueStatus.REJECTED) {
+    if (
+      enqueueResult.status === EnqueueStatus.REJECTED ||
+      enqueueResult.status === EnqueueStatus.SPILLED
+    ) {
       this.options.metrics.recordQueueOverflow(session.namespace, topic, enqueueResult.reason);
       this.eventPublisher.queueOverflow(session.namespace, session.clientId, topic, enqueueResult.reason);
+    }
+
+    if (enqueueResult.status === EnqueueStatus.REJECTED) {
       this.eventPublisher.publishRejected(session.namespace, session.clientId, topic, enqueueResult.reason);
       return;
     }
@@ -262,12 +268,7 @@ export class TopicDispatcher {
     session: ClientSessionState,
     lane: ReturnType<ClientSessionState['lane']> extends infer T ? Exclude<T, undefined> : never,
   ): void {
-    while (true) {
-      const entry = lane.poll();
-      if (entry === undefined) {
-        return;
-      }
-
+    for (let entry = lane.poll(); entry !== undefined; entry = lane.poll()) {
       try {
         session.client.sendEvent(entry.outboundMessage.eventName, entry.outboundMessage.eventArguments);
       } catch {
