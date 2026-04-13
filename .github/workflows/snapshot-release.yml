@@ -1,0 +1,104 @@
+name: GitHub Packages Snapshot
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-snapshot:
+    name: Publish Snapshot
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20.x
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@moshpe'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package smoke tests
+        run: npm run test:package
+
+      - name: Prepare snapshot package
+        id: snapshot
+        shell: bash
+        run: |
+          mkdir -p .snapshot-package/dist
+          cp -R dist/. .snapshot-package/dist/
+          cp README.md LICENSE .snapshot-package/
+
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const source = JSON.parse(readFileSync('package.json', 'utf8'));
+          const match = /^(\d+)\.(\d+)\.(\d+)/.exec(source.version);
+          if (match === null) {
+            throw new Error(`Unsupported base version for snapshot publish: ${source.version}`);
+          }
+
+          const [, major, minor, patch] = match;
+          const snapshotVersion = `${major}.${minor}.${Number(patch) + 1}-snapshot.${process.env.GITHUB_RUN_NUMBER}`;
+
+          const publishPackage = {
+            name: '@moshpe/streamfence-js',
+            version: snapshotVersion,
+            description: source.description,
+            license: source.license,
+            author: source.author,
+            homepage: source.homepage,
+            repository: source.repository,
+            keywords: source.keywords,
+            type: source.type,
+            main: source.main,
+            module: source.module,
+            types: source.types,
+            exports: source.exports,
+            engines: source.engines,
+            dependencies: source.dependencies,
+          };
+
+          writeFileSync(
+            '.snapshot-package/package.json',
+            `${JSON.stringify(publishPackage, null, 2)}\n`,
+          );
+          writeFileSync('.snapshot-package/.npmrc', '@moshpe:registry=https://npm.pkg.github.com\n');
+          writeFileSync('.snapshot-package/.publish-version', `${snapshotVersion}\n`);
+          NODE
+
+          echo "dir=.snapshot-package" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat .snapshot-package/.publish-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish snapshot to GitHub Packages
+        run: npm publish "${{ steps.snapshot.outputs.dir }}" --tag snapshot
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
