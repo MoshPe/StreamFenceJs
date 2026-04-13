@@ -168,12 +168,12 @@ export class PromServerMetrics implements ServerMetrics {
       return '';
     }
 
-    const fragments = names.map((name) => `${name}=\"${this.escapeLabel(String(labels[name]))}\"`);
+    const fragments = names.map((name) => `${name}="${this.escapeLabel(String(labels[name]))}"`);
     return `{${fragments.join(',')}}`;
   }
 
   private escapeLabel(value: string): string {
-    return value.replace(/\\/g, '\\\\').replace(/\"/g, '\\"').replace(/\n/g, '\\n');
+    return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
   }
 }
 
