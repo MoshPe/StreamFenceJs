@@ -609,13 +609,14 @@ All event interfaces are exported for use in typed listener implementations:
 
 See [`examples/`](./examples/) for runnable code:
 
-- **[mixed-workload](./examples/mixed-workload/)** — two servers from a single YAML config: a BEST_EFFORT feed server and an AT_LEAST_ONCE control server
 - **[single-server](./examples/single-server/)** — programmatic builder API, one namespace
+- **[multi-namespace](./examples/multi-namespace/)** — one server with three namespaces: DROP_OLDEST prices, SNAPSHOT_ONLY portfolio, AT_LEAST_ONCE alerts
+- **[mixed-workload](./examples/mixed-workload/)** — two servers from a single YAML config: a BEST_EFFORT feed server and an AT_LEAST_ONCE control server
 
 Run with:
 
 ```bash
-npx tsx examples/mixed-workload/server.ts
+npx tsx examples/multi-namespace/server.ts
 ```
 
 ---
