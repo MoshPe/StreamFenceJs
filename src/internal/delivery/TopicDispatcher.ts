@@ -164,6 +164,9 @@ export class TopicDispatcher {
     }
 
     this.options.ackTracker.removeClient(clientId);
+    for (const lane of session.allLanes()) {
+      lane.clearSpill();
+    }
     this.options.sessionRegistry.remove(clientId);
     this.eventPublisher.clientDisconnected(session.namespace, clientId);
   }
@@ -221,6 +224,9 @@ export class TopicDispatcher {
     }
     if (enqueueResult.status === EnqueueStatus.DROPPED_OLDEST_AND_ACCEPTED) {
       this.options.metrics.recordDropped(session.namespace, topic);
+    }
+    if (enqueueResult.status === EnqueueStatus.SPILLED) {
+      this.options.metrics.recordSpill(session.namespace, topic);
     }
 
     this.eventPublisher.publishAccepted(

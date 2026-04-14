@@ -35,6 +35,9 @@ export interface ServerMetrics {
   /** Records a message coalesced due to `OverflowAction.COALESCE`. */
   recordCoalesced(namespace: string, topic: string): void;
 
+  /** Records a message spilled to disk due to SPILL_TO_DISK overflow. */
+  recordSpill(namespace: string, topic: string): void;
+
   /** Records an authentication rejection on `namespace`. */
   recordAuthRejected(namespace: string): void;
 
@@ -62,6 +65,7 @@ export class NoopServerMetrics implements ServerMetrics {
   recordRetryExhausted(_namespace: string, _topic: string): void {}
   recordDropped(_namespace: string, _topic: string): void {}
   recordCoalesced(_namespace: string, _topic: string): void {}
+  recordSpill(_namespace: string, _topic: string): void {}
   recordAuthRejected(_namespace: string): void {}
   recordAuthRateLimited(_namespace: string): void {}
   scrape(): string {
