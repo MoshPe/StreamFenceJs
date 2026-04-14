@@ -5,15 +5,16 @@
  */
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:3000/feed');
+const socket = io('http://localhost:3000/feed', { transports: ['websocket'] });
 
 socket.on('connect', () => {
   console.log('Connected, id:', socket.id);
-  socket.emit('subscribe', { topic: 'snapshot' });
+  socket.emit('subscribe', { topic: 'snapshot', token: null });
 });
 
-socket.on('topic-message', (envelope: { metadata: { topic: string }; payload: unknown }) => {
-  console.log('Received', envelope.metadata.topic, '->', envelope.payload);
+// Messages arrive on an event named after the topic
+socket.on('snapshot', (payload: unknown) => {
+  console.log('Received snapshot:', payload);
 });
 
 socket.on('disconnect', (reason: string) => {

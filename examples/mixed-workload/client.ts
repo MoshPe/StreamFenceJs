@@ -4,22 +4,22 @@
  * Run (after starting the server):  npx tsx examples/mixed-workload/client.ts
  *
  * Socket.IO protocol used by StreamFenceJs:
- *   Client → server events: subscribe, unsubscribe, publish, ack
- *   Server → client events: topic-message  (envelope: { metadata, payload })
+ *   Client → server events: subscribe, unsubscribe, ack
+ *   Server → client events: emitted on the topic name (e.g. 'snapshot', 'send')
  */
 import { io } from 'socket.io-client';
 
 // ── Feed client ───────────────────────────────────────────────────────────────
-const feedSocket = io('http://localhost:3000/feed');
+const feedSocket = io('http://localhost:3000/feed', { transports: ['websocket'] });
 
 feedSocket.on('connect', () => {
   console.log('[feed] connected, id:', feedSocket.id);
-  // Subscribe to the snapshot topic
-  feedSocket.emit('subscribe', { topic: 'snapshot' });
+  feedSocket.emit('subscribe', { topic: 'snapshot', token: null });
 });
 
-feedSocket.on('topic-message', (envelope: { metadata: { topic: string; messageId: string; ackRequired: boolean }; payload: unknown }) => {
-  console.log('[feed] received', envelope.metadata.topic, '->', envelope.payload);
+// Messages arrive on an event named after the topic
+feedSocket.on('snapshot', (payload: unknown) => {
+  console.log('[feed] snapshot:', payload);
 });
 
 feedSocket.on('disconnect', (reason: string) => {
@@ -27,18 +27,20 @@ feedSocket.on('disconnect', (reason: string) => {
 });
 
 // ── Control client ────────────────────────────────────────────────────────────
-const controlSocket = io('http://localhost:3001/commands');
+const controlSocket = io('http://localhost:3001/commands', { transports: ['websocket'] });
 
 controlSocket.on('connect', () => {
   console.log('[control] connected, id:', controlSocket.id);
-  controlSocket.emit('subscribe', { topic: 'send' });
+  controlSocket.emit('subscribe', { topic: 'send', token: null });
 });
 
-controlSocket.on('topic-message', (envelope: { metadata: { topic: string; messageId: string; ackRequired: boolean }; payload: unknown }) => {
-  console.log('[control] received', envelope.metadata.topic, '->', envelope.payload);
+// AT_LEAST_ONCE messages include metadata as a second argument
+controlSocket.on('send', (payload: unknown, metadata?: { topic?: string; messageId?: string; ackRequired?: boolean }) => {
+  console.log('[control] send:', payload);
   // Acknowledge AT_LEAST_ONCE messages
-  if (envelope.metadata.ackRequired) {
-    controlSocket.emit('ack', { topic: envelope.metadata.topic, messageId: envelope.metadata.messageId });
+  if (metadata?.ackRequired) {
+    controlSocket.emit('ack', { topic: metadata.topic, messageId: metadata.messageId });
+    console.log('[control] acked message', metadata.messageId);
   }
 });
 
