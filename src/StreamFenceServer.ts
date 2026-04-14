@@ -9,6 +9,7 @@ import { AckTracker } from './internal/delivery/AckTracker.js';
 import { ClientSessionRegistry } from './internal/delivery/ClientSessionRegistry.js';
 import type { ClientLaneFactory } from './internal/delivery/ClientSessionState.js';
 import { ClientLane } from './internal/delivery/ClientLane.js';
+import { DefaultDiskSpillQueueFactory } from './internal/delivery/DiskSpillQueueFactory.js';
 import { DiskSpillQueue } from './internal/delivery/DiskSpillQueue.js';
 import { RetryService } from './internal/delivery/RetryService.js';
 import { TopicDispatcher } from './internal/delivery/TopicDispatcher.js';
@@ -75,6 +76,8 @@ export class StreamFenceServer {
     });
     await this.bootstrap.start();
 
+    const spillQueueFactory = new DefaultDiskSpillQueueFactory(this.spec.spillRootPath);
+
     this.namespaceHandlers = this.spec.namespaces.map((namespaceSpec) => {
       const namespaceHandler = new NamespaceHandler({
         namespacePath: namespaceSpec.path,
@@ -83,6 +86,7 @@ export class StreamFenceServer {
         sessionRegistry: this.sessionRegistry!,
         dispatcher: this.dispatcher!,
         laneFactory: (clientId, namespace) => this.createLaneFactory(clientId, namespace),
+        spillQueueFactory,
       });
       namespaceHandler.start();
       return namespaceHandler;
