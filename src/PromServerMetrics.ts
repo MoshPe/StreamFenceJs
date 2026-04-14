@@ -81,6 +81,13 @@ export class PromServerMetrics implements ServerMetrics {
     registers: [this.registry],
   });
 
+  private readonly spilledTotal = new Counter({
+    name: 'streamfence_messages_spilled_total',
+    help: 'Total messages spilled to disk',
+    labelNames: ['namespace', 'topic'],
+    registers: [this.registry],
+  });
+
   private readonly authRejectedTotal = new Counter({
     name: 'streamfence_auth_rejected_total',
     help: 'Total auth rejections',
@@ -131,6 +138,10 @@ export class PromServerMetrics implements ServerMetrics {
 
   recordCoalesced(namespace: string, topic: string): void {
     this.coalescedTotal.labels(namespace, topic).inc();
+  }
+
+  recordSpill(namespace: string, topic: string): void {
+    this.spilledTotal.labels(namespace, topic).inc();
   }
 
   recordAuthRejected(namespace: string): void {

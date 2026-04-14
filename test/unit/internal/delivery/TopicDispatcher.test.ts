@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method -- vi.fn() mocks are plain objects; method access is safe */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,35 +17,21 @@ import { TopicRegistry } from '../../../../src/internal/delivery/TopicRegistry.j
 import { ServerEventPublisher } from '../../../../src/internal/observability/ServerEventPublisher.js';
 import { makeFakeTransportClient, makeTopicPolicy } from './helpers.js';
 
-type MetricsSpies = {
-  recordConnect: ReturnType<typeof vi.fn>;
-  recordDisconnect: ReturnType<typeof vi.fn>;
-  recordPublish: ReturnType<typeof vi.fn>;
-  recordReceived: ReturnType<typeof vi.fn>;
-  recordQueueOverflow: ReturnType<typeof vi.fn>;
-  recordRetry: ReturnType<typeof vi.fn>;
-  recordRetryExhausted: ReturnType<typeof vi.fn>;
-  recordDropped: ReturnType<typeof vi.fn>;
-  recordCoalesced: ReturnType<typeof vi.fn>;
-  recordAuthRejected: ReturnType<typeof vi.fn>;
-  recordAuthRateLimited: ReturnType<typeof vi.fn>;
-  scrape: ReturnType<typeof vi.fn>;
-};
-
-function makeMetrics(): ServerMetrics & MetricsSpies {
+function makeMetrics(): ServerMetrics & Record<string, ReturnType<typeof vi.fn>> {
   return {
-    recordConnect: vi.fn(),
-    recordDisconnect: vi.fn(),
-    recordPublish: vi.fn(),
-    recordReceived: vi.fn(),
-    recordQueueOverflow: vi.fn(),
-    recordRetry: vi.fn(),
-    recordRetryExhausted: vi.fn(),
-    recordDropped: vi.fn(),
-    recordCoalesced: vi.fn(),
-    recordAuthRejected: vi.fn(),
-    recordAuthRateLimited: vi.fn(),
-    scrape: vi.fn().mockReturnValue(''),
+    recordConnect: vi.fn<ServerMetrics['recordConnect']>(),
+    recordDisconnect: vi.fn<ServerMetrics['recordDisconnect']>(),
+    recordPublish: vi.fn<ServerMetrics['recordPublish']>(),
+    recordReceived: vi.fn<ServerMetrics['recordReceived']>(),
+    recordQueueOverflow: vi.fn<ServerMetrics['recordQueueOverflow']>(),
+    recordRetry: vi.fn<ServerMetrics['recordRetry']>(),
+    recordRetryExhausted: vi.fn<ServerMetrics['recordRetryExhausted']>(),
+    recordDropped: vi.fn<ServerMetrics['recordDropped']>(),
+    recordCoalesced: vi.fn<ServerMetrics['recordCoalesced']>(),
+    recordSpill: vi.fn<ServerMetrics['recordSpill']>(),
+    recordAuthRejected: vi.fn<ServerMetrics['recordAuthRejected']>(),
+    recordAuthRateLimited: vi.fn<ServerMetrics['recordAuthRateLimited']>(),
+    scrape: vi.fn<ServerMetrics['scrape']>().mockReturnValue(''),
   };
 }
 

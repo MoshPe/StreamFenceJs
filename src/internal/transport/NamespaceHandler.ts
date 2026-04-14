@@ -6,6 +6,7 @@ import type { TopicDispatcher } from '../delivery/TopicDispatcher.js';
 import type { AckPayload } from '../protocol/AckPayload.js';
 import type { PublishRequest } from '../protocol/PublishRequest.js';
 import type { SubscriptionRequest } from '../protocol/SubscriptionRequest.js';
+import type { DiskSpillQueueFactory } from '../delivery/DiskSpillQueueFactory.js';
 import { ConnectedClientAdapter } from './ConnectedClientAdapter.js';
 
 export class NamespaceHandler {
@@ -22,6 +23,7 @@ export class NamespaceHandler {
     sessionRegistry: ClientSessionRegistry;
     dispatcher: TopicDispatcher;
     laneFactory?: (clientId: string, namespace: string) => ClientLaneFactory;
+    spillQueueFactory?: DiskSpillQueueFactory;
   }) {}
 
   start(): void {
@@ -52,6 +54,7 @@ export class NamespaceHandler {
       this.options.namespacePath,
       new ConnectedClientAdapter(socket),
       this.options.laneFactory?.(socket.id, this.options.namespacePath),
+      this.options.spillQueueFactory,
     );
 
     this.options.sessionRegistry.register(session);
