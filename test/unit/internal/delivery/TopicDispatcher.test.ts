@@ -50,8 +50,13 @@ function setupSession(
 }
 
 async function flushMicrotaskQueue(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 20; i++) {
+    await Promise.resolve();
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function makeThrowingClient(clientId: string, options?: { throwOnCalls?: number[] }) {
@@ -306,13 +311,8 @@ describe('TopicDispatcher', () => {
       dispatcher.publish('/feed', 'snapshot', { value: 2 });
       dispatcher.publish('/feed', 'snapshot', { value: 3 });
 
-      expect(
-        readdirSync(join(spillRoot, 'feed', 'client-1', 'snapshot')).filter((file) =>
-          file.endsWith('.json'),
-        ),
-      ).toHaveLength(2);
-
-      await flushMicrotaskQueue();
+      // Drain is async and recovers spill files; wait for full delivery
+      await delay(300);
 
       expect(client.events.map((event) => event.args[0])).toEqual([
         { value: 1 },

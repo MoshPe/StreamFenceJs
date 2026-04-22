@@ -90,11 +90,11 @@ export class ClientLane {
     }
   }
 
-  poll(): LaneEntry | undefined {
+  async poll(): Promise<LaneEntry | undefined> {
     let entry = this.queue.shift();
     if (entry === undefined) {
       if (this.spillQueue !== undefined && this.spillQueue.hasSpilled()) {
-        this.refillFromDisk();
+        await this.refillFromDisk();
         entry = this.queue.shift();
       }
       if (entry === undefined) {
@@ -115,13 +115,13 @@ export class ClientLane {
     return this.queue[0];
   }
 
-  firstPendingSend(): LaneEntry | undefined {
+  async firstPendingSend(): Promise<LaneEntry | undefined> {
     const found = this.queue.find((entry) => !entry.awaiting);
     if (found !== undefined) {
       return found;
     }
     if (this.spillQueue !== undefined && this.spillQueue.hasSpilled()) {
-      this.refillFromDisk();
+      await this.refillFromDisk();
       return this.queue.find((entry) => !entry.awaiting);
     }
     return undefined;
@@ -174,14 +174,14 @@ export class ClientLane {
   }
 
   clearSpill(): void {
-    this.spillQueue?.clear();
+    void this.spillQueue?.clear();
   }
 
-  private refillFromDisk(): void {
+  private async refillFromDisk(): Promise<void> {
     if (this.spillQueue === undefined || !this.spillQueue.hasSpilled()) {
       return;
     }
-    const recovered = this.spillQueue.recover(this.policy.maxQueuedMessagesPerClient);
+    const recovered = await this.spillQueue.recover(this.policy.maxQueuedMessagesPerClient);
     for (const entry of recovered) {
       this.accept(entry);
     }

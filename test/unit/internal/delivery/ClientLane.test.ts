@@ -9,7 +9,7 @@ import { DiskSpillQueue } from '../../../../src/internal/delivery/DiskSpillQueue
 import { makeLaneEntry, makePublishedMessage, makeTopicPolicy } from './helpers.js';
 
 describe('ClientLane', () => {
-  it('replaces the queued snapshot under SNAPSHOT_ONLY', () => {
+  it('replaces the queued snapshot under SNAPSHOT_ONLY', async () => {
     const lane = new ClientLane(
       makeTopicPolicy({
         overflowAction: OverflowAction.SNAPSHOT_ONLY,
@@ -27,11 +27,11 @@ describe('ClientLane', () => {
     ).toBe(EnqueueStatus.REPLACED_SNAPSHOT);
 
     expect(lane.peek()?.messageId).toBe('m2');
-    expect(lane.poll()?.messageId).toBe('m2');
-    expect(lane.poll()).toBeUndefined();
+    expect((await lane.poll())?.messageId).toBe('m2');
+    expect(await lane.poll()).toBeUndefined();
   });
 
-  it('accepts when under limits and allows polling', () => {
+  it('accepts when under limits and allows polling', async () => {
     const lane = new ClientLane(
       makeTopicPolicy({ maxQueuedMessagesPerClient: 2, maxQueuedBytesPerClient: 128 }),
     );
@@ -40,8 +40,8 @@ describe('ClientLane', () => {
 
     expect(result.status).toBe(EnqueueStatus.ACCEPTED);
     expect(lane.peek()?.messageId).toBe('msg-1');
-    expect(lane.poll()?.messageId).toBe('msg-1');
-    expect(lane.poll()).toBeUndefined();
+    expect((await lane.poll())?.messageId).toBe('msg-1');
+    expect(await lane.poll()).toBeUndefined();
   });
 
   it('rejects entries larger than maxQueuedBytesPerClient', () => {
@@ -125,7 +125,7 @@ describe('ClientLane', () => {
     expect(lane.peek()?.messageId).toBe('m1');
   });
 
-  it('tracks awaiting entries and supports remove/find', () => {
+  it('tracks awaiting entries and supports remove/find', async () => {
     const lane = new ClientLane(makeTopicPolicy());
     const entry = makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) });
 
@@ -133,7 +133,7 @@ describe('ClientLane', () => {
     lane.markAwaiting(entry);
 
     expect(lane.inFlightCount).toBe(1);
-    expect(lane.firstPendingSend()).toBeUndefined();
+    expect(await lane.firstPendingSend()).toBeUndefined();
     expect(lane.findByMessageId('m1')).toBe(entry);
 
     const removed = lane.removeByMessageId('m1');
@@ -173,7 +173,7 @@ describe('ClientLane', () => {
     expect(lane.peek()?.messageId).toBe('m1');
   });
 
-  it('spills overflow entries to disk and replays them in FIFO order', () => {
+  it('spills overflow entries to disk and replays them in FIFO order', async () => {
     const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-client-lane-'));
 
     try {
@@ -193,16 +193,16 @@ describe('ClientLane', () => {
       expect(lane.enqueue(second).status).toBe(EnqueueStatus.SPILLED);
       expect(lane.enqueue(third).status).toBe(EnqueueStatus.SPILLED);
 
-      expect(lane.poll()?.messageId).toBe('m1');
-      expect(lane.poll()?.messageId).toBe('m2');
-      expect(lane.poll()?.messageId).toBe('m3');
-      expect(lane.poll()).toBeUndefined();
+      expect((await lane.poll())?.messageId).toBe('m1');
+      expect((await lane.poll())?.messageId).toBe('m2');
+      expect((await lane.poll())?.messageId).toBe('m3');
+      expect(await lane.poll()).toBeUndefined();
     } finally {
       rmSync(spillRoot, { force: true, recursive: true });
     }
   });
 
-  it('recovers spilled entries through firstPendingSend when memory is empty', () => {
+  it('recovers spilled entries through firstPendingSend when memory is empty', async () => {
     const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-client-lane-recover-'));
 
     try {
@@ -218,10 +218,10 @@ describe('ClientLane', () => {
       lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm2' }) }));
 
       expect(lane.hasPendingSend()).toBe(true);
-      expect(lane.poll()?.messageId).toBe('m1');
+      expect((await lane.poll())?.messageId).toBe('m1');
       expect(lane.peek()).toBeUndefined();
 
-      const recovered = lane.firstPendingSend();
+      const recovered = await lane.firstPendingSend();
       expect(recovered?.messageId).toBe('m2');
       expect(lane.peek()?.messageId).toBe('m2');
     } finally {
@@ -229,7 +229,7 @@ describe('ClientLane', () => {
     }
   });
 
-  it('purges spilled entries when clearSpill is called', () => {
+  it('purges spilled entries when clearSpill is called', async () => {
     const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-client-lane-clear-'));
 
     try {
@@ -246,8 +246,8 @@ describe('ClientLane', () => {
 
       lane.clearSpill();
 
-      expect(lane.poll()?.messageId).toBe('m1');
-      expect(lane.poll()).toBeUndefined();
+      expect((await lane.poll())?.messageId).toBe('m1');
+      expect(await lane.poll()).toBeUndefined();
       expect(lane.hasPendingSend()).toBe(false);
     } finally {
       rmSync(spillRoot, { force: true, recursive: true });

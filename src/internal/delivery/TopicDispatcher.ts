@@ -244,11 +244,11 @@ export class TopicDispatcher {
     }
 
     queueMicrotask(() => {
-      this.drainTopic(session, topic);
+      void this.drainTopic(session, topic);
     });
   }
 
-  private drainTopic(session: ClientSessionState, topic: string): void {
+  private async drainTopic(session: ClientSessionState, topic: string): Promise<void> {
     const lane = session.lane(topic);
     if (lane === undefined) {
       session.finishDrain(topic);
@@ -257,9 +257,9 @@ export class TopicDispatcher {
 
     try {
       if (lane.topicPolicy.deliveryMode === DeliveryMode.BEST_EFFORT) {
-        this.drainBestEffort(session, lane);
+        await this.drainBestEffort(session, lane);
       } else {
-        this.drainAtLeastOnce(session, topic, lane);
+        await this.drainAtLeastOnce(session, topic, lane);
       }
     } finally {
       session.finishDrain(topic);
@@ -270,11 +270,11 @@ export class TopicDispatcher {
     }
   }
 
-  private drainBestEffort(
+  private async drainBestEffort(
     session: ClientSessionState,
     lane: ReturnType<ClientSessionState['lane']> extends infer T ? Exclude<T, undefined> : never,
-  ): void {
-    for (let entry = lane.poll(); entry !== undefined; entry = lane.poll()) {
+  ): Promise<void> {
+    for (let entry = await lane.poll(); entry !== undefined; entry = await lane.poll()) {
       try {
         session.client.sendEvent(entry.outboundMessage.eventName, entry.outboundMessage.eventArguments);
       } catch {
@@ -283,13 +283,13 @@ export class TopicDispatcher {
     }
   }
 
-  private drainAtLeastOnce(
+  private async drainAtLeastOnce(
     session: ClientSessionState,
     topic: string,
     lane: ReturnType<ClientSessionState['lane']> extends infer T ? Exclude<T, undefined> : never,
-  ): void {
+  ): Promise<void> {
     while (lane.inFlightCount < lane.topicPolicy.maxInFlight) {
-      const entry = lane.firstPendingSend();
+      const entry = await lane.firstPendingSend();
       if (entry === undefined) {
         return;
       }

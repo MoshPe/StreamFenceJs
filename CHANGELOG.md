@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2 (2026-04-22)
+
+### Performance
+- **Non-blocking disk spill**: `DiskSpillQueue` now uses `fs.promises` for all file operations — spill writes are fire-and-forget async, preventing event loop blocking during overflow. `recover()` and `clear()` are fully async with proper back-pressure via `Promise.allSettled` before reads.
+
+### Community
+- Added `CONTRIBUTING.md` with setup and workflow guide
+- Added `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1)
+- Expanded npm keywords for better discoverability
+
 ## 1.0.1 (2026-04-14)
 
 ### Features
