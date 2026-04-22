@@ -45,11 +45,6 @@ describe('mapServerConfig - server-level defaults', () => {
     expect(spec.host).toBe('0.0.0.0');
   });
 
-  it('applies default managementPort of null when absent', () => {
-    const spec = mapServerConfig(minimalConfig(), 'feed');
-    expect(spec.managementPort).toBeNull();
-  });
-
   it('applies default transportMode of WS when absent', () => {
     const spec = mapServerConfig(minimalConfig(), 'feed');
     expect(spec.transportMode).toBe(TransportMode.WS);
@@ -90,11 +85,6 @@ describe('mapServerConfig - server-level field mapping', () => {
   it('maps an explicit host', () => {
     const spec = mapServerConfig(minimalConfig({ host: '127.0.0.1' }), 'feed');
     expect(spec.host).toBe('127.0.0.1');
-  });
-
-  it('maps an explicit managementPort', () => {
-    const spec = mapServerConfig(minimalConfig({ managementPort: 9100 }), 'feed');
-    expect(spec.managementPort).toBe(9100);
   });
 
   it('maps transport: WSS', () => {

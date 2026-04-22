@@ -3,7 +3,6 @@
     "feed": {
       "host": "127.0.0.1",
       "port": 3000,
-      "managementPort": 9100,
       "transport": "WS",
       "engineIoTransport": "WEBSOCKET_OR_POLLING",
       "auth": "NONE",

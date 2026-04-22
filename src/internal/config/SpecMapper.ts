@@ -66,7 +66,6 @@ function buildSpec(entry: RawServerEntry, serverName: string): StreamFenceServer
   return createStreamFenceServerSpec({
     host: entry.host ?? '0.0.0.0',
     port: entry.port,
-    managementPort: entry.managementPort ?? null,
     transportMode,
     engineIoTransportMode,
     authMode,

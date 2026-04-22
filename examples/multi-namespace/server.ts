@@ -11,6 +11,7 @@ import { StreamFenceServerBuilder } from '../../src/StreamFenceServerBuilder.js'
 import { NamespaceSpec } from '../../src/NamespaceSpec.js';
 import { DeliveryMode } from '../../src/DeliveryMode.js';
 import { OverflowAction } from '../../src/OverflowAction.js';
+import { Registry } from 'prom-client';
 import { PromServerMetrics } from '../../src/PromServerMetrics.js';
 import type { ServerEventListener } from '../../src/ServerEventListener.js';
 
@@ -18,7 +19,7 @@ import type { ServerEventListener } from '../../src/ServerEventListener.js';
 
 const listener: ServerEventListener = {
   onServerStarted(event) {
-    console.log(`Server started on ${event.host}:${event.port} (management: ${event.managementPort})`);
+    console.log(`Server started on ${event.host}:${event.port}`);
   },
   onClientConnected(event) {
     console.log(`[${event.namespace}] client connected: ${event.clientId} (${event.transport})`);
@@ -70,10 +71,11 @@ const alertsSpec = NamespaceSpec.builder('/alerts')
 
 // ── Build and start ──────────────────────────────────────────────────────────
 
+const registry = new Registry();
+
 const server = new StreamFenceServerBuilder()
   .port(3000)
-  .managementPort(9100)
-  .metrics(new PromServerMetrics())
+  .metrics(new PromServerMetrics(registry))
   .listener(listener)
   .namespace(pricesSpec)
   .namespace(snapshotsSpec)

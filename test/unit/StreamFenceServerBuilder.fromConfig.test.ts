@@ -19,7 +19,6 @@ describe('StreamFenceServerBuilder.fromYaml', () => {
     const spec = builder.buildSpec();
     expect(spec.host).toBe('127.0.0.1');
     expect(spec.port).toBe(3000);
-    expect(spec.managementPort).toBe(9100);
     expect(spec.transportMode).toBe(TransportMode.WS);
     expect(spec.authMode).toBe(AuthMode.NONE);
     expect(spec.namespaces).toHaveLength(1);

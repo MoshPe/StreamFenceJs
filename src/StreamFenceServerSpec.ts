@@ -10,7 +10,6 @@ import type { TransportModeValue } from './TransportMode.js';
 export interface StreamFenceServerSpec {
   readonly host: string;
   readonly port: number;
-  readonly managementPort: number | null;
   readonly transportMode: TransportModeValue;
   readonly engineIoTransportMode: EngineIoTransportModeValue;
   readonly authMode: AuthModeValue;
@@ -25,7 +24,6 @@ export interface StreamFenceServerSpec {
 export function createStreamFenceServerSpec(input: {
   host: string;
   port: number;
-  managementPort: number | null;
   transportMode: TransportModeValue;
   engineIoTransportMode: EngineIoTransportModeValue;
   authMode: AuthModeValue;
@@ -39,7 +37,6 @@ export function createStreamFenceServerSpec(input: {
   return Object.freeze({
     host: input.host,
     port: input.port,
-    managementPort: input.managementPort,
     transportMode: input.transportMode,
     engineIoTransportMode: input.engineIoTransportMode,
     authMode: input.authMode,

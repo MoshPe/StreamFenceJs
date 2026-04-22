@@ -17,8 +17,4 @@ describe('ServerMetrics - interface shape', () => {
     expect(() => m.recordAuthRateLimited('/control')).not.toThrow();
   });
 
-  it('NoopServerMetrics.scrape() returns an empty string', () => {
-    const m = new NoopServerMetrics();
-    expect(m.scrape()).toBe('');
-  });
 });

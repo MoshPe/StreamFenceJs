@@ -14,7 +14,6 @@ describe('StreamFenceServerSpec', () => {
 
     expect(spec.host).toBe('0.0.0.0');
     expect(spec.port).toBe(0);
-    expect(spec.managementPort).toBeNull();
     expect(spec.transportMode).toBe(TransportMode.WS);
     expect(spec.engineIoTransportMode).toBe(EngineIoTransportMode.WEBSOCKET_OR_POLLING);
     expect(spec.authMode).toBe(AuthMode.NONE);

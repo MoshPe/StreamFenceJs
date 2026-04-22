@@ -52,8 +52,17 @@
     "examples:check": "tsc --noEmit --project tsconfig.examples.json",
     "test:package": "npm run build && node test/package/esm-consumer.mjs && node test/package/cjs-consumer.cjs"
   },
+  "peerDependencies": {
+    "prom-client": ">=14"
+  },
+  "peerDependenciesMeta": {
+    "prom-client": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "prom-client": "^15.1.3",
     "@typescript-eslint/eslint-plugin": "^7.8.0",
     "@typescript-eslint/parser": "^7.8.0",
     "@vitest/coverage-v8": "^4.1.4",
@@ -66,7 +75,6 @@
     "vitest": "^4.1.4"
   },
   "dependencies": {
-    "prom-client": "^15.1.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "yaml": "^2.4.1"
