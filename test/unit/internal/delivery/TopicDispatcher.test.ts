@@ -31,7 +31,6 @@ function makeMetrics(): ServerMetrics & Record<string, ReturnType<typeof vi.fn>>
     recordSpill: vi.fn<ServerMetrics['recordSpill']>(),
     recordAuthRejected: vi.fn<ServerMetrics['recordAuthRejected']>(),
     recordAuthRateLimited: vi.fn<ServerMetrics['recordAuthRateLimited']>(),
-    scrape: vi.fn<ServerMetrics['scrape']>().mockReturnValue(''),
   };
 }
 

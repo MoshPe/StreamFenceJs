@@ -73,7 +73,11 @@ Both servers can run in the same Node.js process.
 npm install streamfence-js
 ```
 
-Requires Node.js >= 20.
+Requires Node.js >= 20. If you want Prometheus metrics, install `prom-client` (peer dependency, version `>=14`):
+
+```bash
+npm install prom-client
+```
 
 ---
 
@@ -195,7 +199,7 @@ You can continue customising the builder after loading:
 const server = StreamFenceServerBuilder
   .fromYaml('./streamfence.yaml', { server: 'feed' })
   .listener(myEventListener)
-  .metrics(new PromServerMetrics())
+  .metrics(new PromServerMetrics(register))
   .buildServer();
 ```
 
@@ -206,7 +210,6 @@ servers:
   feed:                                    # server name — used in fromYaml/fromJson
     host: "0.0.0.0"                        # optional, default "0.0.0.0"
     port: 3000                             # required
-    managementPort: 9100                   # optional — enables /health and /metrics HTTP endpoints
     transport: WS                          # optional — WS | WSS, default WS
     engineIoTransport: WEBSOCKET_OR_POLLING  # optional — WEBSOCKET_ONLY | WEBSOCKET_OR_POLLING
     auth: NONE                             # optional — NONE | TOKEN, default NONE
@@ -364,20 +367,38 @@ const server = new StreamFenceServerBuilder()
 
 ## Metrics & management
 
-Use `PromServerMetrics` for Prometheus-format metrics, and enable the management HTTP server for scraping.
+Use `PromServerMetrics` for Prometheus metrics. Pass your own `prom-client` registry — streamfence-js registers its counters into it. Mount the scrape route on your existing HTTP server; no extra port needed.
 
 ```typescript
+import { register } from 'prom-client';
 import { PromServerMetrics } from 'streamfence-js';
 
 const server = new StreamFenceServerBuilder()
   .port(3000)
-  .managementPort(9100)           // enables GET /health and GET /metrics
-  .metrics(new PromServerMetrics())
+  .metrics(new PromServerMetrics(register))   // your existing registry
   .namespace(spec)
   .buildServer();
+
+// Mount on your existing Express app
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
 ```
 
-After starting, `GET http://localhost:9100/metrics` returns Prometheus text format and `GET http://localhost:9100/health` returns `{ "status": "UP", "uptimeMs": ... }`.
+If you don't have a custom registry, omit the argument — it defaults to prom-client's global `register`:
+
+```typescript
+.metrics(new PromServerMetrics())
+```
+
+Using a dedicated isolated registry? Pass `new Registry()`:
+
+```typescript
+import { Registry } from 'prom-client';
+const registry = new Registry();
+.metrics(new PromServerMetrics(registry))
+```
 
 ### Available metrics
 
@@ -444,10 +465,10 @@ const server = new StreamFenceServerBuilder()
 
 | Callback | Event type | Fields |
 |---|---|---|
-| `onServerStarting` | `ServerStartingEvent` | `host`, `port`, `managementPort` |
-| `onServerStarted` | `ServerStartedEvent` | `host`, `port`, `managementPort` |
-| `onServerStopping` | `ServerStoppingEvent` | `host`, `port`, `managementPort` |
-| `onServerStopped` | `ServerStoppedEvent` | `host`, `port`, `managementPort` |
+| `onServerStarting` | `ServerStartingEvent` | `host`, `port` |
+| `onServerStarted` | `ServerStartedEvent` | `host`, `port` |
+| `onServerStopping` | `ServerStoppingEvent` | `host`, `port` |
+| `onServerStopped` | `ServerStoppedEvent` | `host`, `port` |
 
 #### Client connection
 
@@ -496,7 +517,6 @@ Fluent builder for server configuration.
 |---|---|
 | `host(value: string)` | Bind address (default `'0.0.0.0'`) |
 | `port(value: number)` | Socket.IO listen port (use `0` for OS-assigned) |
-| `managementPort(value: number \| null)` | HTTP management port for `/health` and `/metrics` (default `null` = disabled) |
 | `transportMode(value: TransportModeValue)` | `WS` or `WSS` |
 | `engineIoTransportMode(value)` | `WEBSOCKET_ONLY` or `WEBSOCKET_OR_POLLING` |
 | `authMode(value: AuthModeValue)` | `NONE` or `TOKEN` |
@@ -515,15 +535,14 @@ Fluent builder for server configuration.
 
 | Method / Property | Description |
 |---|---|
-| `start(): Promise<void>` | Start the Socket.IO and management servers |
-| `stop(): Promise<void>` | Graceful shutdown — disconnects clients, stops retry loop, closes all ports |
+| `start(): Promise<void>` | Start the Socket.IO server |
+| `stop(): Promise<void>` | Graceful shutdown — disconnects clients, stops retry loop, closes port |
 | `publish(namespace, topic, payload)` | Broadcast a message to all subscribers of a topic in a namespace |
 | `publishTo(namespace, clientId, topic, payload)` | Send a message to a specific client only |
 | `onMessage(namespace, topic, handler)` | Register a handler for inbound client messages on a topic |
 | `addListener(listener: ServerEventListener)` | Register an event listener at runtime (after construction) |
 | `metrics(): ServerMetrics` | Access the metrics instance |
 | `port: number \| null` | Actual bound port after `start()` (useful when constructed with port `0`) |
-| `managementPort: number \| null` | Actual management port after `start()`, or `null` if disabled |
 
 ---
 

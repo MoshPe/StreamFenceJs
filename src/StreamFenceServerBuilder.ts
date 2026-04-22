@@ -21,7 +21,6 @@ import { TransportMode, type TransportModeValue } from './TransportMode.js';
 export class StreamFenceServerBuilder {
   private hostValue = '0.0.0.0';
   private portValue = 0;
-  private managementPortValue: number | null = null;
   private transportModeValue: TransportModeValue = TransportMode.WS;
   private engineIoTransportModeValue: EngineIoTransportModeValue =
     EngineIoTransportMode.WEBSOCKET_OR_POLLING;
@@ -59,7 +58,6 @@ export class StreamFenceServerBuilder {
     const builder = new StreamFenceServerBuilder();
     builder.hostValue = spec.host;
     builder.portValue = spec.port;
-    builder.managementPortValue = spec.managementPort;
     builder.transportModeValue = spec.transportMode;
     builder.engineIoTransportModeValue = spec.engineIoTransportMode;
     builder.authModeValue = spec.authMode;
@@ -83,11 +81,6 @@ export class StreamFenceServerBuilder {
 
   port(value: number): this {
     this.portValue = value;
-    return this;
-  }
-
-  managementPort(value: number | null): this {
-    this.managementPortValue = value;
     return this;
   }
 
@@ -144,7 +137,6 @@ export class StreamFenceServerBuilder {
     return createStreamFenceServerSpec({
       host: this.hostValue,
       port: this.portValue,
-      managementPort: this.managementPortValue,
       transportMode: this.transportModeValue,
       engineIoTransportMode: this.engineIoTransportModeValue,
       authMode: this.authModeValue,

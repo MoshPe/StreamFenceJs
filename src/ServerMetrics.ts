@@ -2,10 +2,8 @@
  * Metrics collector interface for a running `StreamFenceServer`.
  *
  * Mirrors the `recordXxx` surface of `io.streamfence.ServerMetrics` in the parent Java
- * library. The real `prom-client`-backed implementation ships with Plan 2 alongside
- * the delivery engine that calls these methods. This file defines the interface and
- * a `NoopServerMetrics` used as a default so the rest of the code can wire cleanly
- * without requiring a metrics dependency.
+ * library. Use `PromServerMetrics` for Prometheus integration, or implement this interface
+ * to plug in any other metrics backend.
  */
 export interface ServerMetrics {
   /** Records a new client connection on `namespace`. */
@@ -43,17 +41,11 @@ export interface ServerMetrics {
 
   /** Records an auth attempt rejected by the rate limiter on `namespace`. */
   recordAuthRateLimited(namespace: string): void;
-
-  /**
-   * Produces a Prometheus text-format scrape body. The no-op implementation returns an
-   * empty string; the real implementation in Plan 2 returns the actual exposition.
-   */
-  scrape(): string;
 }
 
 /**
  * No-op `ServerMetrics` - used as a placeholder when no real metrics backend is
- * configured. All `recordXxx` methods are empty; `scrape()` returns an empty string.
+ * configured. All `recordXxx` methods are empty.
  */
 export class NoopServerMetrics implements ServerMetrics {
   recordConnect(_namespace: string): void {}
@@ -68,7 +60,4 @@ export class NoopServerMetrics implements ServerMetrics {
   recordSpill(_namespace: string, _topic: string): void {}
   recordAuthRejected(_namespace: string): void {}
   recordAuthRateLimited(_namespace: string): void {}
-  scrape(): string {
-    return '';
-  }
 }

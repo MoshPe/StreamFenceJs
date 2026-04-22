@@ -14,7 +14,6 @@ import { DiskSpillQueue } from './internal/delivery/DiskSpillQueue.js';
 import { RetryService } from './internal/delivery/RetryService.js';
 import { TopicDispatcher } from './internal/delivery/TopicDispatcher.js';
 import { TopicRegistry } from './internal/delivery/TopicRegistry.js';
-import { ManagementHttpServer } from './internal/observability/ManagementHttpServer.js';
 import { NamespaceHandler } from './internal/transport/NamespaceHandler.js';
 import { SocketServerBootstrap } from './internal/transport/SocketServerBootstrap.js';
 
@@ -29,7 +28,6 @@ export class StreamFenceServer {
   private readonly listeners: ServerEventListener[];
 
   private bootstrap: SocketServerBootstrap | undefined;
-  private managementServer: ManagementHttpServer | undefined;
   private topicRegistry: TopicRegistry | undefined;
   private sessionRegistry: ClientSessionRegistry | undefined;
   private ackTracker: AckTracker | undefined;
@@ -40,7 +38,6 @@ export class StreamFenceServer {
   private retryProcessor: (() => void) | null = null;
   private retryIntervalMs = 50;
   private retryIntervalHandle: NodeJS.Timeout | undefined;
-  private startedAtMs = 0;
 
   constructor(private readonly spec: StreamFenceServerSpec) {
     this.listeners = [...spec.listeners];
@@ -51,7 +48,7 @@ export class StreamFenceServer {
       return;
     }
 
-    this.emitServerStarting(this.spec.port, this.spec.managementPort ?? 0);
+    this.emitServerStarting(this.spec.port);
 
     this.topicRegistry = new TopicRegistry();
     for (const namespaceSpec of this.spec.namespaces) {
@@ -92,19 +89,6 @@ export class StreamFenceServer {
       return namespaceHandler;
     });
 
-    if (this.spec.managementPort !== null) {
-      this.managementServer = new ManagementHttpServer({
-        host: this.spec.host,
-        port: this.spec.managementPort,
-        healthProvider: () => ({
-          status: this.running ? 'UP' : 'DOWN',
-          uptimeMs: this.running ? Date.now() - this.startedAtMs : 0,
-        }),
-        metricsProvider: () => this.spec.metrics.scrape(),
-      });
-      await this.managementServer.start();
-    }
-
     if (this.retryProcessor === null) {
       this.retryProcessor = () => {
         this.dispatcher?.processRetries();
@@ -112,7 +96,6 @@ export class StreamFenceServer {
     }
 
     this.running = true;
-    this.startedAtMs = Date.now();
 
     if (this.retryIntervalHandle === undefined) {
       this.retryIntervalHandle = setInterval(() => {
@@ -120,18 +103,15 @@ export class StreamFenceServer {
       }, this.retryIntervalMs);
     }
 
-    this.emitServerStarted(this.port ?? 0, this.managementPort ?? 0);
+    this.emitServerStarted(this.port ?? 0);
   }
 
   async stop(): Promise<void> {
-    if (!this.running && this.bootstrap === undefined && this.managementServer === undefined) {
+    if (!this.running && this.bootstrap === undefined) {
       return;
     }
 
-    this.emitServerStopping(
-      this.port ?? this.spec.port,
-      this.managementPort ?? (this.spec.managementPort ?? 0),
-    );
+    this.emitServerStopping(this.port ?? this.spec.port);
 
     if (this.retryIntervalHandle !== undefined) {
       clearInterval(this.retryIntervalHandle);
@@ -144,11 +124,6 @@ export class StreamFenceServer {
     this.namespaceHandlers = [];
 
     this.dispatcher?.close();
-
-    if (this.managementServer !== undefined) {
-      await this.managementServer.stop();
-      this.managementServer = undefined;
-    }
 
     if (this.bootstrap !== undefined) {
       await this.bootstrap.stop();
@@ -163,7 +138,7 @@ export class StreamFenceServer {
 
     this.running = false;
 
-    this.emitServerStopped(this.spec.port, this.spec.managementPort ?? 0);
+    this.emitServerStopped(this.spec.port);
   }
 
   publish(namespace: string, topic: string, payload: unknown): void {
@@ -204,10 +179,6 @@ export class StreamFenceServer {
     return this.bootstrap?.port ?? null;
   }
 
-  get managementPort(): number | null {
-    return this.managementServer?.port ?? null;
-  }
-
   private createLaneFactory(clientId: string, namespace: string): ClientLaneFactory {
     return (topic, policy) => {
       const spillQueue =
@@ -237,43 +208,27 @@ export class StreamFenceServer {
     return value.replace(/[\\/:"*?<>|]/g, '_');
   }
 
-  private emitServerStarting(port: number, managementPort: number): void {
+  private emitServerStarting(port: number): void {
     for (const listener of this.listeners) {
-      listener.onServerStarting?.({
-        host: this.spec.host,
-        port,
-        managementPort,
-      });
+      listener.onServerStarting?.({ host: this.spec.host, port });
     }
   }
 
-  private emitServerStarted(port: number, managementPort: number): void {
+  private emitServerStarted(port: number): void {
     for (const listener of this.listeners) {
-      listener.onServerStarted?.({
-        host: this.spec.host,
-        port,
-        managementPort,
-      });
+      listener.onServerStarted?.({ host: this.spec.host, port });
     }
   }
 
-  private emitServerStopping(port: number, managementPort: number): void {
+  private emitServerStopping(port: number): void {
     for (const listener of this.listeners) {
-      listener.onServerStopping?.({
-        host: this.spec.host,
-        port,
-        managementPort,
-      });
+      listener.onServerStopping?.({ host: this.spec.host, port });
     }
   }
 
-  private emitServerStopped(port: number, managementPort: number): void {
+  private emitServerStopped(port: number): void {
     for (const listener of this.listeners) {
-      listener.onServerStopped?.({
-        host: this.spec.host,
-        port,
-        managementPort,
-      });
+      listener.onServerStopped?.({ host: this.spec.host, port });
     }
   }
 }

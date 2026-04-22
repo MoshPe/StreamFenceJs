@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { io as connectClient, type Socket } from 'socket.io-client';
+import { Registry } from 'prom-client';
 import { NamespaceSpec } from '../../src/NamespaceSpec.js';
 import { OverflowAction } from '../../src/OverflowAction.js';
 import { PromServerMetrics } from '../../src/PromServerMetrics.js';
@@ -26,7 +27,8 @@ describe('streamfence spill to disk', () => {
 
   it('replays spilled messages to real clients and records overflow metrics', async () => {
     spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-server-spill-'));
-    const metrics = new PromServerMetrics();
+    const registry = new Registry();
+    const metrics = new PromServerMetrics(registry);
 
     server = new StreamFenceServerBuilder()
       .host('127.0.0.1')
@@ -65,8 +67,9 @@ describe('streamfence spill to disk', () => {
     await waitFor(() => received.length === 3);
 
     expect(received).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }]);
-    expect(metrics.scrape()).toContain('streamfence_queue_overflow_total');
-    expect(metrics.scrape()).toContain('reason="spilled to disk"');
+    const metricsOutput = await registry.metrics();
+    expect(metricsOutput).toContain('streamfence_queue_overflow_total');
+    expect(metricsOutput).toContain('reason="spilled to disk"');
   });
 
   it('purges spill files when the server stops before queued spill is drained', async () => {

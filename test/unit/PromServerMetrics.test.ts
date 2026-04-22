@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { Registry } from 'prom-client';
 import { PromServerMetrics } from '../../src/PromServerMetrics.js';
 
 describe('PromServerMetrics', () => {
-  it('records all metrics and exposes them via scrape()', () => {
-    const metrics = new PromServerMetrics();
+  it('registers metrics into the provided registry', async () => {
+    const registry = new Registry();
+    const metrics = new PromServerMetrics(registry);
 
     metrics.recordConnect('/feed');
     metrics.recordDisconnect('/feed');
@@ -17,7 +19,7 @@ describe('PromServerMetrics', () => {
     metrics.recordAuthRejected('/feed');
     metrics.recordAuthRateLimited('/feed');
 
-    const output = metrics.scrape();
+    const output = await registry.metrics();
 
     expect(output).toContain('streamfence_connections_total');
     expect(output).toContain('streamfence_disconnections_total');
@@ -34,5 +36,15 @@ describe('PromServerMetrics', () => {
     expect(output).toContain('streamfence_auth_rate_limited_total');
     expect(output).toContain('namespace="/feed"');
     expect(output).toContain('topic="snapshot"');
+  });
+
+  it('uses the default registry when no registry is provided', async () => {
+    const { register } = await import('prom-client');
+    register.clear();
+    const metrics = new PromServerMetrics();
+    metrics.recordConnect('/test');
+    const output = await register.metrics();
+    expect(output).toContain('streamfence_connections_total');
+    register.clear();
   });
 });

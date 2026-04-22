@@ -33,28 +33,24 @@ export interface ServerEventListener {
 export interface ServerStartingEvent {
   readonly host: string;
   readonly port: number;
-  readonly managementPort: number;
 }
 
 /** Fired after the Socket.IO server has successfully started. */
 export interface ServerStartedEvent {
   readonly host: string;
   readonly port: number;
-  readonly managementPort: number;
 }
 
 /** Fired when server shutdown begins. */
 export interface ServerStoppingEvent {
   readonly host: string;
   readonly port: number;
-  readonly managementPort: number;
 }
 
 /** Fired after the server has fully stopped. */
 export interface ServerStoppedEvent {
   readonly host: string;
   readonly port: number;
-  readonly managementPort: number;
 }
 
 /** Fired when a client opens a Socket.IO connection to a namespace. */

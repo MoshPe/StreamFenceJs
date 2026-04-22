@@ -11,7 +11,6 @@ import type { RawNamespaceConfig } from './RawNamespaceConfig.js';
 export interface RawServerEntry {
   host?: string;
   port: number;
-  managementPort?: number | null;
   transport?: string;
   engineIoTransport?: string;
   auth?: string;
