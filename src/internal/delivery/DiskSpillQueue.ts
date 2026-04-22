@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync, readFileSync, renameSync, unlinkSync, readdirSync } from 'node:fs';
+import { writeFile, rename, readdir, readFile, unlink } from 'node:fs/promises';
+import { mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { serialize, deserialize } from './SpilledEntry.js';
 import type { SpilledEntryData } from './SpilledEntry.js';
@@ -7,6 +8,7 @@ import type { LaneEntry } from './LaneEntry.js';
 export class DiskSpillQueue {
   private count: number;
   private nextSeq: number;
+  private readonly flushPromises = new Set<Promise<void>>();
 
   constructor(private readonly dir: string) {
     mkdirSync(dir, { recursive: true });
@@ -21,15 +23,25 @@ export class DiskSpillQueue {
   }
 
   spill(entry: LaneEntry): void {
-    const data = serialize(entry);
     const seq = this.nextSeq;
     this.nextSeq += 1;
+    this.count += 1;
+    const p = this.writeEntry(entry, seq);
+    this.flushPromises.add(p);
+    void p.finally(() => this.flushPromises.delete(p));
+  }
+
+  private async writeEntry(entry: LaneEntry, seq: number): Promise<void> {
+    const data = serialize(entry);
     const filename = String(seq).padStart(8, '0') + '.json';
     const tmpPath = join(this.dir, filename + '.tmp');
     const finalPath = join(this.dir, filename);
-    writeFileSync(tmpPath, JSON.stringify(data), 'utf8');
-    renameSync(tmpPath, finalPath);
-    this.count += 1;
+    try {
+      await writeFile(tmpPath, JSON.stringify(data), 'utf8');
+      await rename(tmpPath, finalPath);
+    } catch {
+      this.count = Math.max(0, this.count - 1);
+    }
   }
 
   hasSpilled(): boolean {
@@ -40,26 +52,42 @@ export class DiskSpillQueue {
     return this.count;
   }
 
-  recover(maxCount: number): LaneEntry[] {
-    const files = readdirSync(this.dir).filter(f => f.endsWith('.json')).sort();
+  async recover(maxCount: number): Promise<LaneEntry[]> {
+    if (this.flushPromises.size > 0) {
+      await Promise.allSettled(Array.from(this.flushPromises));
+    }
+    const files = (await readdir(this.dir)).filter(f => f.endsWith('.json')).sort();
     const toRecover = files.slice(0, maxCount);
     const entries: LaneEntry[] = [];
     for (const file of toRecover) {
       const filePath = join(this.dir, file);
-      const raw = readFileSync(filePath, 'utf8');
-      const data = JSON.parse(raw) as SpilledEntryData;
-      entries.push(deserialize(data));
-      unlinkSync(filePath);
-      this.count -= 1;
+      try {
+        const raw = await readFile(filePath, 'utf8');
+        const data = JSON.parse(raw) as SpilledEntryData;
+        entries.push(deserialize(data));
+        await unlink(filePath);
+        this.count -= 1;
+      } catch {
+        // skip corrupt or missing files
+      }
     }
     return entries;
   }
 
-  clear(): void {
-    const files = readdirSync(this.dir).filter(f => f.endsWith('.json') || f.endsWith('.tmp'));
-    for (const file of files) {
-      unlinkSync(join(this.dir, file));
-    }
+  async clear(): Promise<void> {
+    const pending = Array.from(this.flushPromises);
+    this.flushPromises.clear();
     this.count = 0;
+    await Promise.allSettled(pending);
+    try {
+      const files = await readdir(this.dir);
+      await Promise.all(
+        files
+          .filter(f => f.endsWith('.json') || f.endsWith('.tmp'))
+          .map(f => unlink(join(this.dir, f)).catch(() => {})),
+      );
+    } catch {
+      // best-effort cleanup
+    }
   }
 }

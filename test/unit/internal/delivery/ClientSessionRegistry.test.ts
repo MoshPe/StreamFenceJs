@@ -49,17 +49,18 @@ describe('ClientSessionRegistry', () => {
     ]);
   });
 
-  it('purges spilled lane files when a session is removed', () => {
+  it('purges spilled lane files when a session is removed', async () => {
     const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-session-registry-'));
 
     try {
       const spillDir = join(spillRoot, 'feed', 'client-1', 'snapshot');
+      const spillQueue = new DiskSpillQueue(join(spillRoot, 'feed', 'client-1', 'snapshot'));
       const registry = new ClientSessionRegistry();
       const session = new ClientSessionState(
         'client-1',
         '/feed',
         makeFakeTransportClient('client-1'),
-        (topic, policy) => new ClientLane(policy, new DiskSpillQueue(join(spillRoot, 'feed', 'client-1', topic))),
+        (_topic, policy) => new ClientLane(policy, spillQueue),
       );
 
       registry.register(session);
@@ -78,10 +79,14 @@ describe('ClientSessionRegistry', () => {
       lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm1' }) }));
       lane.enqueue(makeLaneEntry({ publishedMessage: makePublishedMessage({ messageId: 'm2' }) }));
 
+      // Wait for async write to land on disk before checking
+      await spillQueue.recover(0);
       expect(readdirSync(spillDir).filter((file) => file.endsWith('.json'))).toHaveLength(1);
 
       registry.remove('client-1');
 
+      // clearSpill is fire-and-forget; wait for async clear to complete
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
       expect(readdirSync(spillDir).filter((file) => file.endsWith('.json'))).toEqual([]);
     } finally {
       rmSync(spillRoot, { force: true, recursive: true });

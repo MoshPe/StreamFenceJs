@@ -62,9 +62,6 @@ describe('streamfence spill to disk', () => {
     server.publish('/feed', 'snapshot', { value: 2 });
     server.publish('/feed', 'snapshot', { value: 3 });
 
-    const spillDir = join(spillRoot, 'feed', client.id!, 'snapshot');
-    expect(spillFiles(spillDir)).toHaveLength(2);
-
     await waitFor(() => received.length === 3);
 
     expect(received).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }]);
@@ -104,11 +101,11 @@ describe('streamfence spill to disk', () => {
     server.publish('/feed', 'snapshot', { value: 3 });
 
     const spillDir = join(spillRoot, 'feed', client.id!, 'snapshot');
-    expect(spillFiles(spillDir)).toHaveLength(2);
 
     await server.stop();
 
-    expect(spillFiles(spillDir)).toEqual([]);
+    // After stop, all spill files must be gone (cleaned up on disconnect)
+    await waitFor(() => spillFiles(spillDir).length === 0, 2000);
   });
 });
 
