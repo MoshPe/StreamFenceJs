@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { io as connectClient, type Socket } from 'socket.io-client';
 import { Registry } from 'prom-client';
 import { NamespaceSpec } from '../../src/NamespaceSpec.js';
 import { PromServerMetrics } from '../../src/PromServerMetrics.js';
 import { StreamFenceServerBuilder } from '../../src/StreamFenceServerBuilder.js';
+import type { ServerEventListener } from '../../src/ServerEventListener.js';
 
 describe('streamfence server lifecycle', () => {
   let server = new StreamFenceServerBuilder()
@@ -20,10 +21,16 @@ describe('streamfence server lifecycle', () => {
     const registry = new Registry();
     const metrics = new PromServerMetrics(registry);
 
+    const onServerStarted = vi.fn();
+    const onServerStopping = vi.fn();
+    const onServerStopped = vi.fn();
+    const listener: ServerEventListener = { onServerStarted, onServerStopping, onServerStopped };
+
     server = new StreamFenceServerBuilder()
       .host('127.0.0.1')
       .port(0)
       .metrics(metrics)
+      .listener(listener)
       .namespace(NamespaceSpec.builder('/feed').topic('snapshot').build())
       .buildServer();
 
@@ -53,6 +60,14 @@ describe('streamfence server lifecycle', () => {
     expect(metricsBody).toContain('streamfence_messages_published_total');
     expect(metricsBody).toContain('namespace="/feed"');
     expect(metricsBody).toContain('topic="snapshot"');
+
+    expect(onServerStarted).toHaveBeenCalledWith(
+      expect.objectContaining({ host: '127.0.0.1' }),
+    );
+
+    await server.stop();
+    expect(onServerStopping).toHaveBeenCalled();
+    expect(onServerStopped).toHaveBeenCalled();
   });
 });
 

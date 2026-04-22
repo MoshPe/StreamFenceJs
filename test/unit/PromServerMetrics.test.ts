@@ -3,7 +3,7 @@ import { Registry } from 'prom-client';
 import { PromServerMetrics } from '../../src/PromServerMetrics.js';
 
 describe('PromServerMetrics', () => {
-  it('registers metrics into the provided registry', async () => {
+  it('registers all metrics into the provided registry', async () => {
     const registry = new Registry();
     const metrics = new PromServerMetrics(registry);
 
@@ -16,6 +16,7 @@ describe('PromServerMetrics', () => {
     metrics.recordRetryExhausted('/feed', 'snapshot');
     metrics.recordDropped('/feed', 'snapshot');
     metrics.recordCoalesced('/feed', 'snapshot');
+    metrics.recordSpill('/feed', 'snapshot');
     metrics.recordAuthRejected('/feed');
     metrics.recordAuthRateLimited('/feed');
 
@@ -32,6 +33,7 @@ describe('PromServerMetrics', () => {
     expect(output).toContain('streamfence_retries_exhausted_total');
     expect(output).toContain('streamfence_messages_dropped_total');
     expect(output).toContain('streamfence_messages_coalesced_total');
+    expect(output).toContain('streamfence_messages_spilled_total');
     expect(output).toContain('streamfence_auth_rejected_total');
     expect(output).toContain('streamfence_auth_rate_limited_total');
     expect(output).toContain('namespace="/feed"');
