@@ -18,9 +18,7 @@
     "queue",
     "at-least-once",
     "delivery",
-    "real-time",
-    "nodejs",
-    "typescript"
+    "real-time"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
