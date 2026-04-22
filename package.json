@@ -14,7 +14,11 @@
     "websocket",
     "backpressure",
     "reliability",
-    "streaming"
+    "streaming",
+    "queue",
+    "at-least-once",
+    "delivery",
+    "real-time"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
