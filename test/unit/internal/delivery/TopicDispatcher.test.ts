@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/unbound-method -- vi.fn() mocks are plain objects; method access is safe */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DeliveryMode } from '../../../../src/DeliveryMode.js';
