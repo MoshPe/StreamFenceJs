@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.3 (2026-04-22)
+
+### Breaking Changes
+- **`managementPort` removed**: The built-in management HTTP server (`/health`, `/metrics`) is gone. Mount metrics on your own HTTP server instead (see below).
+- **`prom-client` is now a peer dependency** (`>=14`, optional): Install it yourself — `npm install prom-client`. This avoids duplicate registry issues when your app already uses prom-client.
+- **`scrape()` removed from `ServerMetrics` interface**: Use `registry.metrics()` from your prom-client Registry instead.
+- **`managementPort` removed from lifecycle events**: `ServerStartingEvent`, `ServerStartedEvent`, `ServerStoppingEvent`, `ServerStoppedEvent` no longer carry a `managementPort` field.
+
+### Migration
+
+```typescript
+// Before
+const server = new StreamFenceServerBuilder()
+  .metrics(new PromServerMetrics())
+  .managementPort(9090)
+  .buildServer();
+
+// After
+import { register } from 'prom-client';
+
+const server = new StreamFenceServerBuilder()
+  .metrics(new PromServerMetrics(register))
+  .buildServer();
+
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+```
+
 ## 1.0.2 (2026-04-22)
 
 ### Performance
