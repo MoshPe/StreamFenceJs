@@ -37,6 +37,22 @@ npx tsx examples/multi-namespace/server.ts
 npx tsx examples/multi-namespace/client.ts
 ```
 
+## Spill to Disk
+
+Demonstrates `AT_LEAST_ONCE` delivery with `SPILL_TO_DISK` overflow. The server
+burst-publishes 20 orders faster than the client's small in-memory queue (4 slots)
+can absorb them. Excess messages are written to a local disk buffer and replayed
+transparently as the slow client acks and drains its backlog — zero message loss
+even under heavy load.
+
+```bash
+# Terminal 1 — start the server (publishes a burst of 20 orders)
+npx tsx examples/spill-to-disk/server.ts
+
+# Terminal 2 — start the slow consumer (acks each message after 300ms)
+npx tsx examples/spill-to-disk/client.ts
+```
+
 ## Mixed Workload
 
 Demonstrates two servers from a single YAML config file: a high-frequency

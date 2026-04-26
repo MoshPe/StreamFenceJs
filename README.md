@@ -250,7 +250,7 @@ JSON format is also supported — same structure, `.json` extension. Use `fromJs
 
 | Constraint | Reason |
 |---|---|
-| `overflowAction` must be `REJECT_NEW` | Other overflow actions would silently discard reliable messages |
+| `overflowAction` must be `REJECT_NEW` or `SPILL_TO_DISK` | Other overflow actions silently discard messages, breaking at-least-once semantics. `SPILL_TO_DISK` is allowed because it preserves every message on disk. |
 | `coalesce` must be `false` | Coalescing would replace messages that need individual acknowledgement |
 | `maxRetries` must be >= 1 | At-least-once semantics require at least one retry attempt |
 | `maxInFlight` must not exceed `maxQueuedMessagesPerClient` | In-flight limit cannot be larger than the queue itself |
