@@ -236,8 +236,13 @@ function validateReliableMode(fields: {
   if (fields.deliveryMode !== DeliveryMode.AT_LEAST_ONCE) {
     return;
   }
-  if (fields.overflowAction !== OverflowAction.REJECT_NEW) {
-    throw new Error('AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction');
+  if (
+    fields.overflowAction !== OverflowAction.REJECT_NEW &&
+    fields.overflowAction !== OverflowAction.SPILL_TO_DISK
+  ) {
+    throw new Error(
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW or SPILL_TO_DISK overflowAction',
+    );
   }
   if (fields.coalesce) {
     throw new Error('AT_LEAST_ONCE namespaces cannot enable coalescing');

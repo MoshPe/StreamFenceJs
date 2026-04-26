@@ -535,6 +535,136 @@ describe('TopicDispatcher', () => {
     dispatcher.close();
   });
 
+  it('AT_LEAST_ONCE sends payload + metadata as second event argument', async () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({
+        topic: 'snapshot',
+        deliveryMode: DeliveryMode.AT_LEAST_ONCE,
+        maxInFlight: 1,
+        ackTimeoutMs: 1000,
+        maxRetries: 1,
+      }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const { client } = setupSession(sessionRegistry);
+
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics: makeMetrics(),
+    });
+
+    dispatcher.publish('/feed', 'snapshot', { value: 42 });
+    await flushMicrotaskQueue();
+
+    expect(client.events).toHaveLength(1);
+    const event = client.events[0]!;
+    expect(event.eventName).toBe('snapshot');
+    // First arg: payload
+    expect(event.args[0]).toEqual({ value: 42 });
+    // Second arg: metadata with ackRequired=true
+    const meta = event.args[1] as { ackRequired: boolean; messageId: string; topic: string; namespace: string };
+    expect(meta.ackRequired).toBe(true);
+    expect(meta.topic).toBe('snapshot');
+    expect(meta.namespace).toBe('/feed');
+    expect(typeof meta.messageId).toBe('string');
+
+    dispatcher.close();
+  });
+
+  it('BEST_EFFORT sends only the payload — no metadata appended', async () => {
+    const topicRegistry = new TopicRegistry();
+    topicRegistry.register(
+      makeTopicPolicy({ topic: 'snapshot', deliveryMode: DeliveryMode.BEST_EFFORT }),
+    );
+
+    const sessionRegistry = new ClientSessionRegistry();
+    const { client } = setupSession(sessionRegistry);
+
+    const dispatcher = new TopicDispatcher({
+      topicRegistry,
+      sessionRegistry,
+      ackTracker: new AckTracker(),
+      retryService: new RetryService(new AckTracker(), 10_000),
+      metrics: makeMetrics(),
+    });
+
+    dispatcher.publish('/feed', 'snapshot', { value: 7 });
+    await flushMicrotaskQueue();
+
+    expect(client.events).toHaveLength(1);
+    const event = client.events[0]!;
+    expect(event.args).toHaveLength(1);
+    expect(event.args[0]).toEqual({ value: 7 });
+
+    dispatcher.close();
+  });
+
+  it('AT_LEAST_ONCE with SPILL_TO_DISK: delivers spilled message after ack frees the in-flight slot', async () => {
+    const spillRoot = mkdtempSync(join(tmpdir(), 'streamfence-spill-alo-'));
+
+    try {
+      const topicRegistry = new TopicRegistry();
+      topicRegistry.register(
+        makeTopicPolicy({
+          topic: 'snapshot',
+          deliveryMode: DeliveryMode.AT_LEAST_ONCE,
+          overflowAction: OverflowAction.SPILL_TO_DISK,
+          maxQueuedMessagesPerClient: 1,
+          maxInFlight: 1,
+          ackTimeoutMs: 5000,
+          maxRetries: 1,
+        }),
+      );
+
+      const sessionRegistry = new ClientSessionRegistry();
+      const { session, client } = setupSession(sessionRegistry, 'client-1', (topic, policy) => {
+        return new ClientLane(policy, new DiskSpillQueue(join(spillRoot, 'feed', 'client-1', topic)));
+      });
+
+      const ackTracker = new AckTracker();
+      const dispatcher = new TopicDispatcher({
+        topicRegistry,
+        sessionRegistry,
+        ackTracker,
+        retryService: new RetryService(ackTracker, 10_000),
+        metrics: makeMetrics(),
+      });
+
+      // Publish 2 messages; second spills because maxQueuedMessagesPerClient=1
+      dispatcher.publish('/feed', 'snapshot', { seq: 1 });
+      dispatcher.publish('/feed', 'snapshot', { seq: 2 });
+
+      // Allow drain to run — only msg-1 should be sent (maxInFlight=1)
+      await delay(100);
+      expect(client.events).toHaveLength(1);
+      expect(client.events[0]?.args[0]).toEqual({ seq: 1 });
+
+      // Ack msg-1 — should trigger drain that recovers seq:2 from spill
+      const firstId = session.lane('snapshot')?.peek()?.messageId;
+      expect(firstId).toBeDefined();
+      dispatcher.acknowledge('client-1', '/feed', 'snapshot', firstId as string);
+
+      // Allow spill recovery + drain to run
+      await delay(200);
+      expect(client.events).toHaveLength(2);
+      expect(client.events[1]?.args[0]).toEqual({ seq: 2 });
+
+      // Verify metadata on the spilled message
+      const spilledMeta = client.events[1]?.args[1] as { ackRequired: boolean; messageId: string };
+      expect(spilledMeta.ackRequired).toBe(true);
+      expect(typeof spilledMeta.messageId).toBe('string');
+
+      dispatcher.close();
+    } finally {
+      rmSync(spillRoot, { force: true, recursive: true });
+    }
+  });
+
   it('drops exhausted retry entries from the lane', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));

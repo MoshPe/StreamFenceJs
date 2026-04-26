@@ -265,7 +265,7 @@ describe('mapServerConfig - namespace mapping', () => {
       },
     };
     expect(() => mapServerConfig(config, 'feed')).toThrow(
-      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW or SPILL_TO_DISK overflowAction',
     );
   });
 });

@@ -27,7 +27,6 @@ export class TopicDispatcher {
     eventPublisher?: ServerEventPublisher;
   }) {
     this.eventPublisher = options.eventPublisher ?? ServerEventPublisher.noOp();
-    this.options.retryService.start();
   }
 
   publish(namespace: string, topic: string, payload: unknown): void {
@@ -154,6 +153,16 @@ export class TopicDispatcher {
 
       const lane = session.lane(decision.topic);
       lane?.removeByMessageId(decision.pendingMessage.messageId);
+
+      // After dropping the exhausted entry, resume draining if spilled messages
+      // are waiting and the in-flight budget allows it.
+      if (
+        lane !== undefined &&
+        lane.hasPendingSend() &&
+        lane.inFlightCount < lane.topicPolicy.maxInFlight
+      ) {
+        this.scheduleDrain(session, decision.topic);
+      }
     }
   }
 
@@ -183,7 +192,6 @@ export class TopicDispatcher {
   }
 
   close(): void {
-    this.options.retryService.stop();
   }
 
   private enqueueForSession(
@@ -264,7 +272,11 @@ export class TopicDispatcher {
     } finally {
       session.finishDrain(topic);
       const currentLane = session.lane(topic);
-      if (currentLane !== undefined && currentLane.hasPendingSend()) {
+      if (
+        currentLane !== undefined &&
+        currentLane.hasPendingSend() &&
+        currentLane.inFlightCount < currentLane.topicPolicy.maxInFlight
+      ) {
         this.scheduleDrain(session, topic);
       }
     }
@@ -305,7 +317,10 @@ export class TopicDispatcher {
       );
 
       try {
-        session.client.sendEvent(entry.outboundMessage.eventName, entry.outboundMessage.eventArguments);
+        session.client.sendEvent(entry.outboundMessage.eventName, [
+          ...entry.outboundMessage.eventArguments,
+          entry.outboundMessage.metadata,
+        ]);
       } catch {
         this.options.ackTracker.acknowledge(
           session.clientId,

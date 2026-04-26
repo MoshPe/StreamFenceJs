@@ -141,16 +141,22 @@ describe('NamespaceSpec - AT_LEAST_ONCE cross-field rules', () => {
       .deliveryMode(DeliveryMode.AT_LEAST_ONCE)
       .maxRetries(3);
 
-  it('requires overflowAction = REJECT_NEW', () => {
+  it('requires overflowAction = REJECT_NEW or SPILL_TO_DISK', () => {
     expect(() => reliable().overflowAction(OverflowAction.DROP_OLDEST).build()).toThrow(
-      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW or SPILL_TO_DISK overflowAction',
     );
     expect(() => reliable().overflowAction(OverflowAction.COALESCE).build()).toThrow(
-      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW or SPILL_TO_DISK overflowAction',
     );
     expect(() => reliable().overflowAction(OverflowAction.SNAPSHOT_ONLY).build()).toThrow(
-      'AT_LEAST_ONCE namespaces must use REJECT_NEW overflowAction',
+      'AT_LEAST_ONCE namespaces must use REJECT_NEW or SPILL_TO_DISK overflowAction',
     );
+  });
+
+  it('allows overflowAction = SPILL_TO_DISK', () => {
+    expect(() =>
+      reliable().overflowAction(OverflowAction.SPILL_TO_DISK).build(),
+    ).not.toThrow();
   });
 
   it('forbids coalesce = true', () => {
