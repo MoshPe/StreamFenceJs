@@ -2,7 +2,7 @@
  * Action taken when a client's per-topic queue is full and a new message arrives.
  *
  * Configured per namespace and applies uniformly to all topics in that namespace.
- * `DeliveryMode.AT_LEAST_ONCE` namespaces must use `REJECT_NEW`.
+ * `DeliveryMode.AT_LEAST_ONCE` namespaces must use `REJECT_NEW` or `SPILL_TO_DISK`.
  *
  * Mirrors `io.streamfence.OverflowAction` in the parent Java library.
  */
