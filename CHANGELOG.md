@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 (2026-04-26)
+
+### Features
+- **`SPILL_TO_DISK` for `AT_LEAST_ONCE` namespaces**: Excess messages are written to disk and transparently replayed as the client acks and drains its backlog — zero message loss under heavy burst load. Previously `AT_LEAST_ONCE` required `REJECT_NEW`; `SPILL_TO_DISK` is now also accepted.
+
+### Bug Fixes
+- **Wire format**: `AT_LEAST_ONCE` messages now correctly deliver `(payload, metadata)` as two socket event arguments. Previously only `payload` was sent, so clients could never extract `messageId` and ack.
+- **Competing retry interval**: `TopicDispatcher` was calling `retryService.start()` in its constructor, creating a 50 ms interval that consumed expired `AckTracker` entries and discarded the retry decisions before `processRetries` could act on them. Retries and exhaustions were silently swallowed.
+- **Exhaustion drain**: After a message exhausted its retries and was removed from the lane, no drain was triggered, leaving any spilled messages stranded on disk indefinitely.
+- **Infinite drain loop**: The `drainTopic` finally-block reschedule was not gated on `inFlightCount < maxInFlight`, causing an infinite microtask loop when a message was in-flight and spill was pending simultaneously.
+
+### Tests
+- Unit tests for `AT_LEAST_ONCE` wire format (metadata as second arg) and `BEST_EFFORT` no-metadata path
+- Unit test for spill-then-ack delivery flow
+- Integration tests: end-to-end spill delivery, FIFO ordering across spilled messages, withheld delivery until retry exhaustion frees the in-flight slot
+
+### Examples
+- Added `examples/spill-to-disk/` — server burst-publishes 20 orders, slow client acks each after 300 ms, demonstrating zero-loss delivery via disk spill
+
 ## 1.0.3 (2026-04-22)
 
 ### Breaking Changes
